@@ -1,0 +1,19 @@
+import { useEffect, useRef } from 'react';
+
+/**
+ * Ejecuta `callback` inmediatamente y despues cada `intervalMs` mientras el
+ * componente este montado. Usado para simular tiempo real via polling
+ * (chat, tracking de ubicacion, estado de la solicitud).
+ */
+export function usePolling(callback: () => void, intervalMs: number, enabled = true) {
+  const savedCallback = useRef(callback);
+  savedCallback.current = callback;
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    savedCallback.current();
+    const id = setInterval(() => savedCallback.current(), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs, enabled]);
+}

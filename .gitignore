@@ -1,0 +1,7 @@
+backend/vendor/
+backend/.env
+backend/composer.phar
+node_modules/
+mobile/node_modules/
+.expo/
+*.log
