@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import axios from 'axios';
 import { TOKEN_KEY } from '../api/client';
 import * as AuthApi from '../api/auth';
 import { Rol, Usuario } from '../types';
@@ -8,6 +9,18 @@ import { dispositivoProtegido } from '../security/biometria';
 
 /** Si la app estuvo en segundo plano mas que esto, se vuelve a pedir huella o PIN. */
 const BLOQUEO_TRAS_MS = 5 * 60 * 1000;
+/** Copia del usuario para poder entrar aunque el servidor no responda al abrir la app. */
+const USUARIO_KEY = 'gomeria_usuario';
+
+async function guardarSesion(token: string, user: Usuario) {
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await SecureStore.setItemAsync(USUARIO_KEY, JSON.stringify(user));
+}
+
+async function borrarSesion() {
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(USUARIO_KEY);
+}
 
 interface AuthContextValue {
   usuario: Usuario | null;
@@ -40,13 +53,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       if (token) {
+        let user: Usuario | null = null;
         try {
-          const user = await AuthApi.me();
+          user = await AuthApi.me();
+          await SecureStore.setItemAsync(USUARIO_KEY, JSON.stringify(user));
+        } catch (err) {
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
+            // El servidor dice que la sesion ya no vale: hay que volver a iniciar sesion.
+            await borrarSesion();
+          } else {
+            // Sin conexion o servidor caido: se mantiene la sesion con la copia guardada.
+            const guardado = await SecureStore.getItemAsync(USUARIO_KEY);
+            user = guardado ? (JSON.parse(guardado) as Usuario) : null;
+          }
+        }
+        if (user) {
           // La sesion quedo guardada de una vez anterior: se pide huella o PIN para entrar.
           if (await dispositivoProtegido()) setBloqueado(true);
           setUsuario(user);
-        } catch {
-          await SecureStore.deleteItemAsync(TOKEN_KEY);
         }
       }
       setCargando(false);
@@ -71,18 +95,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const { usuario: user, token } = await AuthApi.login(email, password);
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
+    await guardarSesion(token, user);
     setUsuario(user);
   };
 
   const registrar: AuthContextValue['registrar'] = async (payload) => {
     const { usuario: user, token } = await AuthApi.register(payload);
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
+    await guardarSesion(token, user);
     setUsuario(user);
   };
 
   const logout = async () => {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await borrarSesion();
     setBloqueado(false);
     setUsuario(null);
   };
