@@ -7,11 +7,12 @@ import { AuthStack } from './AuthStack';
 import { ClienteStack } from './ClienteStack';
 import { GomeroStack } from './GomeroStack';
 import { LoadingView } from '../components/LoadingView';
+import BloqueoScreen from '../screens/auth/BloqueoScreen';
 import { navigationRef } from './navigationRef';
 import { fonts } from '../theme';
 
 export function RootNavigator() {
-  const { usuario, cargando } = useAuth();
+  const { usuario, cargando, bloqueado } = useAuth();
   const { colors, isDark } = useTheme();
   usePushNotifications();
 
@@ -36,6 +37,10 @@ export function RootNavigator() {
 
   if (cargando) {
     return <LoadingView texto="Iniciando Gomería Móvil..." />;
+  }
+
+  if (usuario && bloqueado) {
+    return <BloqueoScreen />;
   }
 
   return (

@@ -1,12 +1,20 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { TOKEN_KEY } from '../api/client';
 import * as AuthApi from '../api/auth';
 import { Rol, Usuario } from '../types';
+import { dispositivoProtegido } from '../security/biometria';
+
+/** Si la app estuvo en segundo plano mas que esto, se vuelve a pedir huella o PIN. */
+const BLOQUEO_TRAS_MS = 5 * 60 * 1000;
 
 interface AuthContextValue {
   usuario: Usuario | null;
   cargando: boolean;
+  /** La sesion esta guardada pero hay que confirmar con huella o PIN antes de mostrarla. */
+  bloqueado: boolean;
+  desbloquear: () => void;
   login: (email: string, password: string) => Promise<void>;
   registrar: (payload: {
     nombre: string;
@@ -25,6 +33,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [bloqueado, setBloqueado] = useState(false);
+  const enSegundoPlanoDesde = useRef<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -32,6 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (token) {
         try {
           const user = await AuthApi.me();
+          // La sesion quedo guardada de una vez anterior: se pide huella o PIN para entrar.
+          if (await dispositivoProtegido()) setBloqueado(true);
           setUsuario(user);
         } catch {
           await SecureStore.deleteItemAsync(TOKEN_KEY);
@@ -40,6 +52,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCargando(false);
     })();
   }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (estado) => {
+      if (estado === 'background') {
+        enSegundoPlanoDesde.current = Date.now();
+        return;
+      }
+      if (estado !== 'active') return;
+      const desde = enSegundoPlanoDesde.current;
+      enSegundoPlanoDesde.current = null;
+      if (usuario && desde && Date.now() - desde > BLOQUEO_TRAS_MS && (await dispositivoProtegido())) {
+        setBloqueado(true);
+      }
+    });
+    return () => sub.remove();
+  }, [usuario]);
 
   const login = async (email: string, password: string) => {
     const { usuario: user, token } = await AuthApi.login(email, password);
@@ -55,8 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    setBloqueado(false);
     setUsuario(null);
   };
+
+  const desbloquear = () => setBloqueado(false);
 
   const refrescarUsuario = async () => {
     const user = await AuthApi.me();
@@ -64,8 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ usuario, cargando, login, registrar, logout, refrescarUsuario }),
-    [usuario, cargando]
+    () => ({ usuario, cargando, bloqueado, desbloquear, login, registrar, logout, refrescarUsuario }),
+    [usuario, cargando, bloqueado]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

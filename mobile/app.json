@@ -39,6 +39,12 @@
     "plugins": [
       "expo-secure-store",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Usamos Face ID para que entres a tu cuenta sin escribir la contraseña."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Usamos tu ubicación para conectarte con gomeros cercanos y que puedan encontrarte."
