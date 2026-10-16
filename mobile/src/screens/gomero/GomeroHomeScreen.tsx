@@ -1,16 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Switch, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Switch, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SolicitudCard } from '../../components/SolicitudCard';
+import { Avatar } from '../../components/Avatar';
+import { ProfileSheet } from '../../components/ProfileSheet';
+import { EmptyState } from '../../components/EmptyState';
+import { ErrorState } from '../../components/ErrorState';
+import { FadeIn, PulseDot } from '../../components/Animated';
+import { ListaSkeleton } from '../../components/Skeleton';
 import * as SolicitudesApi from '../../api/solicitudes';
 import * as GomerosApi from '../../api/gomeros';
 import { getErrorMessage } from '../../api/client';
 import { usePolling } from '../../hooks/usePolling';
 import { useLocationWatcher } from '../../hooks/useLocationWatcher';
 import { useAuth } from '../../context/AuthContext';
-import { colors } from '../../theme';
+import { useFeedback } from '../../context/FeedbackContext';
+import { haptics } from '../../utils/haptics';
+import { formatPrecio } from '../../utils/format';
+import { useTheme } from '../../context/ThemeContext';
+import { ThemeColors, radius, shadow, spacing, typography } from '../../theme';
 import { Solicitud } from '../../types';
 import { GomeroStackParamList } from '../../navigation/types';
 
@@ -18,11 +30,18 @@ type Props = NativeStackScreenProps<GomeroStackParamList, 'GomeroHome'>;
 
 export default function GomeroHomeScreen({ navigation }: Props) {
   const { usuario, logout, refrescarUsuario } = useAuth();
+  const { toast, confirmar } = useFeedback();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
   const [disponible, setDisponible] = useState(!!usuario?.gomero?.disponible);
   const [permisoUbicacion, setPermisoUbicacion] = useState(false);
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [cargando, setCargando] = useState(false);
+  const [primeraCarga, setPrimeraCarga] = useState(true);
   const [aceptandoId, setAceptandoId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [perfilAbierto, setPerfilAbierto] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -32,7 +51,7 @@ export default function GomeroHomeScreen({ navigation }: Props) {
   }, []);
 
   // GPS continuo (no un timer fijo): se actualiza cada vez que el gomero se mueve,
-  // asi la posicion que ve el cliente refleja el movimiento real.
+  // así la posición que ve el cliente refleja el movimiento real.
   useLocationWatcher(disponible && permisoUbicacion, useCallback((coords) => {
     GomerosApi.actualizarUbicacion(coords.latitude, coords.longitude).catch(() => {});
   }, []));
@@ -40,15 +59,18 @@ export default function GomeroHomeScreen({ navigation }: Props) {
   const cargarDisponibles = useCallback(async () => {
     if (!disponible) {
       setSolicitudes([]);
+      setPrimeraCarga(false);
       return;
     }
     setCargando(true);
     try {
       setSolicitudes(await SolicitudesApi.solicitudesDisponibles());
-    } catch {
-      // el proximo polling reintenta
+      setError(null);
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setCargando(false);
+      setPrimeraCarga(false);
     }
   }, [disponible]);
 
@@ -62,107 +84,183 @@ export default function GomeroHomeScreen({ navigation }: Props) {
 
   const toggleDisponible = async (valor: boolean) => {
     if (valor && !permisoUbicacion) {
-      Alert.alert('Falta permiso', 'Necesitamos tu ubicacion para mostrarte solicitudes cercanas');
+      toast({ tipo: 'error', titulo: 'Falta permiso de ubicación', mensaje: 'Lo necesitamos para mostrarte solicitudes cercanas.' });
       return;
     }
+    haptics.seleccion();
     setDisponible(valor);
     try {
       await GomerosApi.actualizarDisponibilidad(valor);
       await refrescarUsuario();
     } catch (err) {
       setDisponible(!valor);
-      Alert.alert('No se pudo actualizar', getErrorMessage(err));
+      toast({ tipo: 'error', titulo: 'No se pudo actualizar', mensaje: getErrorMessage(err) });
     }
   };
 
   const aceptar = async (solicitud: Solicitud) => {
+    const detalle = [
+      solicitud.cliente_nombre && `Cliente: ${solicitud.cliente_nombre} ${solicitud.cliente_apellido ?? ''}`.trim(),
+      typeof solicitud.distancia_km === 'number' && `A ${solicitud.distancia_km.toFixed(1)} km de vos`,
+      solicitud.precio_estimado && `Precio estimado: ${formatPrecio(solicitud.precio_estimado)}`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const ok = await confirmar({
+      titulo: `¿Aceptar "${solicitud.servicio_nombre}"?`,
+      mensaje: detalle || undefined,
+      confirmar: 'Aceptar pedido',
+      cancelar: 'Ahora no',
+      icono: 'checkmark-circle-outline',
+    });
+    if (!ok) return;
+
     setAceptandoId(solicitud.id);
     try {
       await SolicitudesApi.aceptarSolicitud(solicitud.id);
       navigation.navigate('SolicitudActiva', { solicitudId: solicitud.id });
     } catch (err) {
-      Alert.alert('No se pudo aceptar', getErrorMessage(err));
+      toast({ tipo: 'error', titulo: 'No se pudo aceptar', mensaje: getErrorMessage(err) });
       cargarDisponibles();
     } finally {
       setAceptandoId(null);
     }
   };
 
+  const calificacion = usuario?.gomero?.calificacion_promedio;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.saludo}>Hola, {usuario?.nombre} 🔧</Text>
-          <Text style={styles.subtitulo}>
-            {usuario?.gomero?.calificacion_promedio
-              ? `★ ${parseFloat(usuario.gomero.calificacion_promedio).toFixed(1)}`
-              : 'Sin calificaciones aun'}
-          </Text>
-        </View>
-        <Pressable onPress={() => logout()}>
-          <Text style={styles.logout}>Salir</Text>
+        <Pressable style={styles.headerLeft} onPress={() => setPerfilAbierto(true)} hitSlop={8}>
+          <Avatar nombre={usuario?.nombre} apellido={usuario?.apellido} />
+          <View>
+            <Text style={styles.saludo}>Hola, {usuario?.nombre}</Text>
+            <View style={styles.calificacionRow}>
+              <Ionicons name="star" size={13} color={colors.warning} />
+              <Text style={styles.subtitulo}>
+                {calificacion ? parseFloat(calificacion).toFixed(1) : 'Sin calificaciones aún'}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+        <Pressable
+          style={styles.iconBtn}
+          onPress={() => navigation.navigate('Historial')}
+          hitSlop={8}
+          android_ripple={{ color: colors.primaryLight, borderless: true, radius: 22 }}
+          accessibilityLabel="Ver historial"
+        >
+          <Ionicons name="time-outline" size={20} color={colors.primary} />
         </Pressable>
       </View>
 
       <View style={styles.disponibleBox}>
-        <View>
-          <Text style={styles.disponibleTitulo}>{disponible ? 'Estas disponible' : 'Estas desconectado'}</Text>
-          <Text style={styles.disponibleSub}>
-            {disponible ? 'Vas a recibir solicitudes cercanas' : 'Activa para empezar a recibir pedidos'}
-          </Text>
+        <View style={styles.disponibleTextoBox}>
+          {disponible ? (
+            <PulseDot color={colors.success} size={10} />
+          ) : (
+            <View style={[styles.puntoEstado, { backgroundColor: colors.textMuted }]} />
+          )}
+          <View>
+            <Text style={styles.disponibleTitulo}>{disponible ? 'Estás disponible' : 'Estás desconectado'}</Text>
+            <Text style={styles.disponibleSub}>
+              {disponible ? 'Vas a recibir solicitudes cercanas' : 'Activá para empezar a recibir pedidos'}
+            </Text>
+          </View>
         </View>
-        <Switch value={disponible} onValueChange={toggleDisponible} trackColor={{ true: colors.primary }} />
+        <Switch
+          value={disponible}
+          onValueChange={toggleDisponible}
+          trackColor={{ true: colors.primary, false: colors.border }}
+          thumbColor="#fff"
+        />
       </View>
-
-      <Pressable style={styles.historialLink} onPress={() => navigation.navigate('Historial')}>
-        <Text style={styles.historialText}>Ver historial de servicios →</Text>
-      </Pressable>
 
       <Text style={styles.seccion}>Solicitudes disponibles</Text>
       {!disponible ? (
-        <Text style={styles.vacio}>Activate como disponible para ver solicitudes cercanas</Text>
+        <EmptyState
+          icon="power-outline"
+          title="Estás desconectado"
+          subtitle="Activate como disponible para ver solicitudes cercanas"
+        />
+      ) : primeraCarga ? (
+        <ListaSkeleton cantidad={3} />
+      ) : error && solicitudes.length === 0 ? (
+        <ErrorState subtitle={error} onRetry={cargarDisponibles} />
       ) : (
         <FlatList
           data={solicitudes}
           keyExtractor={(s) => String(s.id)}
-          refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargarDisponibles} />}
+          refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargarDisponibles} tintColor={colors.primary} />}
           contentContainerStyle={styles.lista}
-          ListEmptyComponent={<Text style={styles.vacio}>No hay solicitudes cerca por ahora</Text>}
-          renderItem={({ item }) => (
-            <View>
+          ListEmptyComponent={
+            <EmptyState icon="map-outline" title="No hay solicitudes cerca por ahora" subtitle="Te avisamos apenas llegue una" />
+          }
+          renderItem={({ item, index }) => (
+            <FadeIn index={index}>
               <SolicitudCard solicitud={item} mostrarCliente onPress={() => aceptar(item)} />
               {aceptandoId === item.id && <Text style={styles.aceptando}>Aceptando...</Text>}
-            </View>
+            </FadeIn>
           )}
         />
       )}
+
+      <ProfileSheet
+        visible={perfilAbierto}
+        usuario={usuario}
+        onClose={() => setPerfilAbierto(false)}
+        onHistorial={() => navigation.navigate('Historial')}
+        onLogout={async () => {
+          const ok = await confirmar({
+            titulo: '¿Cerrar sesión?',
+            mensaje: disponible
+              ? 'Mientras no estés conectado no vas a recibir solicitudes.'
+              : 'Vas a tener que volver a ingresar con tu email y contraseña.',
+            confirmar: 'Cerrar sesión',
+            destructivo: true,
+            icono: 'log-out-outline',
+          });
+          if (ok) logout();
+        }}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 60, paddingHorizontal: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  saludo: { fontSize: 22, fontWeight: '800', color: colors.secondary },
-  subtitulo: { fontSize: 13, color: colors.warning, marginTop: 2, fontWeight: '600' },
-  logout: { color: colors.danger, fontWeight: '600' },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.xl },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 1 },
+  saludo: { ...typography.heading, color: colors.secondary },
+  calificacionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
+  subtitulo: { ...typography.smallStrong, color: colors.textMuted },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+  },
   disponibleBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 16,
+    marginBottom: spacing.xl,
+    ...shadow.card,
   },
-  disponibleTitulo: { fontWeight: '700', color: colors.text },
-  disponibleSub: { fontSize: 12, color: colors.textMuted, marginTop: 2, maxWidth: 220 },
-  historialLink: { marginBottom: 16 },
-  historialText: { color: colors.primary, fontWeight: '600' },
-  seccion: { fontSize: 15, fontWeight: '700', color: colors.secondary, marginBottom: 10 },
-  lista: { paddingBottom: 40 },
-  vacio: { textAlign: 'center', color: colors.textMuted, marginTop: 20 },
-  aceptando: { textAlign: 'center', color: colors.primary, marginTop: -8, marginBottom: 12, fontSize: 12 },
+  disponibleTextoBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 1 },
+  puntoEstado: { width: 10, height: 10, borderRadius: 5 },
+  disponibleTitulo: { ...typography.subheading, color: colors.text },
+  disponibleSub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xxs, maxWidth: 220 },
+  seccion: { ...typography.heading, color: colors.secondary, marginBottom: spacing.md },
+  lista: { paddingBottom: spacing.huge, flexGrow: 1 },
+  aceptando: { ...typography.captionStrong, textAlign: 'center', color: colors.primary, marginTop: -spacing.sm, marginBottom: spacing.md },
 });

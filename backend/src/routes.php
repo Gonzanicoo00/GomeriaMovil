@@ -10,6 +10,7 @@ use Gomeria\Controllers\GomeroController;
 use Gomeria\Controllers\ServicioController;
 use Gomeria\Controllers\SolicitudController;
 use Gomeria\Controllers\TrackingController;
+use Gomeria\Controllers\UsuarioController;
 use Gomeria\Middleware\AuthMiddleware;
 
 /** @var Gomeria\Core\Router $router */
@@ -27,6 +28,9 @@ $router->get('/api/health', function () {
 $router->post('/api/auth/register', [AuthController::class, 'register']);
 $router->post('/api/auth/login', [AuthController::class, 'login']);
 $router->get('/api/auth/me', [AuthController::class, 'me'], [$auth]);
+
+// ---- Usuario (push notifications) ----
+$router->put('/api/usuarios/push-token', [UsuarioController::class, 'actualizarPushToken'], [$auth]);
 
 // ---- Servicios (catalogo) ----
 $router->get('/api/servicios', [ServicioController::class, 'listar']);

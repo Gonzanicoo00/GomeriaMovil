@@ -1,9 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Mensaje } from '../types';
 import * as ChatApi from '../api/chat';
 import { usePolling } from '../hooks/usePolling';
-import { colors } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { ThemeColors, radius, spacing, typography } from '../theme';
+import { EmptyState } from './EmptyState';
 
 interface Props {
   solicitudId: number;
@@ -12,6 +15,8 @@ interface Props {
 }
 
 export function Chat({ solicitudId, usuarioId, activo }: Props) {
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -25,7 +30,7 @@ export function Chat({ solicitudId, usuarioId, activo }: Props) {
         setMensajes((prev) => [...prev, ...nuevos]);
       }
     } catch {
-      // silencioso: el proximo polling reintenta
+      // silencioso: el próximo polling reintenta
     }
   }, [solicitudId]);
 
@@ -62,7 +67,7 @@ export function Chat({ solicitudId, usuarioId, activo }: Props) {
             </View>
           );
         }}
-        ListEmptyComponent={<Text style={styles.vacio}>Todavia no hay mensajes</Text>}
+        ListEmptyComponent={<EmptyState icon="chatbubbles-outline" title="Todavía no hay mensajes" subtitle="Escribile para coordinar los detalles" />}
       />
       {activo && (
         <View style={styles.inputRow}>
@@ -70,11 +75,16 @@ export function Chat({ solicitudId, usuarioId, activo }: Props) {
             style={styles.input}
             value={texto}
             onChangeText={setTexto}
-            placeholder="Escribi un mensaje..."
+            placeholder="Escribí un mensaje..."
             placeholderTextColor={colors.textMuted}
           />
-          <Pressable style={styles.sendBtn} onPress={enviar} disabled={enviando}>
-            <Text style={styles.sendText}>Enviar</Text>
+          <Pressable
+            style={[styles.sendBtn, (!texto.trim() || enviando) && styles.sendBtnDisabled]}
+            onPress={enviar}
+            disabled={enviando}
+            android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}
+          >
+            <Ionicons name="send" size={18} color="#fff" />
           </Pressable>
         </View>
       )}
@@ -82,26 +92,36 @@ export function Chat({ solicitudId, usuarioId, activo }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  lista: { padding: 12, flexGrow: 1 },
-  vacio: { textAlign: 'center', color: colors.textMuted, marginTop: 20 },
-  bubble: { maxWidth: '80%', borderRadius: 12, padding: 10, marginBottom: 8 },
-  bubbleMio: { alignSelf: 'flex-end', backgroundColor: colors.primary },
-  bubbleOtro: { alignSelf: 'flex-start', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  remitente: { fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 2 },
-  textoMio: { color: '#fff', fontSize: 14 },
-  textoOtro: { color: colors.text, fontSize: 14 },
-  inputRow: { flexDirection: 'row', padding: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: colors.text,
-  },
-  sendBtn: { justifyContent: 'center', paddingHorizontal: 16, backgroundColor: colors.primary, borderRadius: 20 },
-  sendText: { color: '#fff', fontWeight: '700' },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    lista: { padding: spacing.md, flexGrow: 1 },
+    bubble: { maxWidth: '80%', borderRadius: radius.lg, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+    bubbleMio: { alignSelf: 'flex-end', backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+    bubbleOtro: { alignSelf: 'flex-start', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderBottomLeftRadius: 4 },
+    remitente: { ...typography.captionStrong, color: colors.textMuted, marginBottom: spacing.xxs },
+    textoMio: { ...typography.body, fontSize: 14, color: '#fff' },
+    textoOtro: { ...typography.body, fontSize: 14, color: colors.text },
+    inputRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.sm },
+    input: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.pill,
+      ...typography.body,
+      fontSize: 14,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      color: colors.text,
+      backgroundColor: colors.background,
+    },
+    sendBtn: {
+      width: 42,
+      height: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: radius.pill,
+    },
+    sendBtnDisabled: { opacity: 0.5 },
+  });

@@ -2,11 +2,13 @@
 
 namespace Gomeria\Controllers;
 
+use Gomeria\Helpers\PushNotifier;
 use Gomeria\Helpers\Response;
 use Gomeria\Helpers\Validator;
 use Gomeria\Middleware\AuthMiddleware;
 use Gomeria\Models\Mensaje;
 use Gomeria\Models\Solicitud;
+use Gomeria\Models\Usuario;
 
 class ChatController
 {
@@ -47,8 +49,40 @@ class ChatController
         }
 
         $id = Mensaje::create($solicitudId, (int) $user['sub'], trim($body['contenido']));
+        $mensaje = Mensaje::findById($id);
 
-        Response::success(Mensaje::findById($id), 201);
+        self::notificarMensaje($solicitudId, (int) $user['sub']);
+
+        Response::success($mensaje, 201);
+    }
+
+    /**
+     * Avisa al otro participante de la solicitud (el que no escribio) que llego un mensaje nuevo.
+     */
+    private static function notificarMensaje(int $solicitudId, int $remitenteId): void
+    {
+        $solicitud = Solicitud::findById($solicitudId);
+        if (!$solicitud) {
+            return;
+        }
+
+        $destinoId = $remitenteId === (int) $solicitud['cliente_id']
+            ? $solicitud['gomero_id']
+            : $solicitud['cliente_id'];
+
+        if (!$destinoId) {
+            return;
+        }
+
+        $remitente = Usuario::findById($remitenteId);
+        $destino = Usuario::findById((int) $destinoId);
+
+        PushNotifier::enviar(
+            $destino['push_token'] ?? null,
+            "Mensaje de {$remitente['nombre']}",
+            'Toca para ver la conversacion',
+            ['solicitudId' => $solicitudId, 'paraRol' => $destino['rol'] ?? null]
+        );
     }
 
     private static function input(): array

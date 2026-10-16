@@ -2,11 +2,13 @@
 
 namespace Gomeria\Controllers;
 
+use Gomeria\Helpers\PushNotifier;
 use Gomeria\Helpers\Response;
 use Gomeria\Helpers\Validator;
 use Gomeria\Middleware\AuthMiddleware;
 use Gomeria\Models\Gomero;
 use Gomeria\Models\Solicitud;
+use Gomeria\Models\Usuario;
 
 class SolicitudController
 {
@@ -109,7 +111,17 @@ class SolicitudController
             Response::error('La solicitud ya no esta disponible', 409);
         }
 
-        Response::success(Solicitud::findById($id));
+        $solicitud = Solicitud::findById($id);
+
+        $cliente = Usuario::findById((int) $solicitud['cliente_id']);
+        PushNotifier::enviar(
+            $cliente['push_token'] ?? null,
+            'Encontramos un gomero',
+            "{$solicitud['gomero_nombre']} viene en camino a tu ubicacion",
+            ['solicitudId' => $id, 'paraRol' => 'cliente']
+        );
+
+        Response::success($solicitud);
     }
 
     public static function cambiarEstado(array $params): void
@@ -153,8 +165,43 @@ class SolicitudController
         }
 
         Solicitud::cambiarEstado($id, $nuevoEstado, $extra);
+        $actualizada = Solicitud::findById($id);
 
-        Response::success(Solicitud::findById($id));
+        self::notificarCambioEstado($actualizada, $nuevoEstado, (string) $user['rol']);
+
+        Response::success($actualizada);
+    }
+
+    /**
+     * Avisa a la otra parte (cliente o gomero) cuando cambia el estado de la solicitud.
+     */
+    private static function notificarCambioEstado(array $solicitud, string $nuevoEstado, string $rolQueCambio): void
+    {
+        $mensajes = [
+            'en_camino' => ['Tu gomero esta en camino', "{$solicitud['gomero_nombre']} se dirige a tu ubicacion"],
+            'en_proceso' => ['Servicio en proceso', "{$solicitud['gomero_nombre']} empezo a trabajar en tu vehiculo"],
+            'completada' => ['¡Servicio completado!', 'Conta que tal te fue calificando a tu gomero'],
+            'cancelada' => ['Solicitud cancelada', $rolQueCambio === 'gomero' ? 'El gomero cancelo la solicitud' : 'El cliente cancelo la solicitud'],
+        ];
+
+        if (!isset($mensajes[$nuevoEstado])) {
+            return;
+        }
+        [$titulo, $cuerpo] = $mensajes[$nuevoEstado];
+
+        // El gomero cambia el estado -> avisamos al cliente, y viceversa (cancelacion del cliente).
+        $destinoId = $rolQueCambio === 'gomero' ? $solicitud['cliente_id'] : $solicitud['gomero_id'];
+        if (!$destinoId) {
+            return;
+        }
+
+        $destino = Usuario::findById((int) $destinoId);
+        PushNotifier::enviar(
+            $destino['push_token'] ?? null,
+            $titulo,
+            $cuerpo,
+            ['solicitudId' => $solicitud['id'], 'paraRol' => $rolQueCambio === 'gomero' ? 'cliente' : 'gomero']
+        );
     }
 
     private static function input(): array

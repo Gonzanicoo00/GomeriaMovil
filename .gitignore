@@ -5,3 +5,7 @@ node_modules/
 mobile/node_modules/
 .expo/
 *.log
+
+# IDE y salidas generadas
+.idea/
+graphify-out/

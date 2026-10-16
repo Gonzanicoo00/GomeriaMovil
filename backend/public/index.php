@@ -8,8 +8,10 @@ use Dotenv\Dotenv;
 use Gomeria\Core\Router;
 use Gomeria\Helpers\Response;
 
+// En local se lee el .env; en produccion (Railway) las variables vienen del entorno.
 $dotenv = Dotenv::createImmutable(dirname(__DIR__));
-$dotenv->load();
+$dotenv->safeLoad();
+$_ENV = array_merge(getenv(), $_ENV);
 
 if (($_ENV['APP_DEBUG'] ?? 'false') === 'true') {
     ini_set('display_errors', '1');

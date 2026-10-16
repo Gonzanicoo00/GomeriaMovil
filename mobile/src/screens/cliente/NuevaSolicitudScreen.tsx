@@ -1,17 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
+import { Input } from '../../components/Input';
+import { LoadingView } from '../../components/LoadingView';
 import * as SolicitudesApi from '../../api/solicitudes';
 import { getErrorMessage } from '../../api/client';
-import { colors } from '../../theme';
+import { useFeedback } from '../../context/FeedbackContext';
+import { useTheme } from '../../context/ThemeContext';
+import { ThemeColors, radius, spacing, typography } from '../../theme';
 import { ClienteStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ClienteStackParamList, 'NuevaSolicitud'>;
 
 export default function NuevaSolicitudScreen({ route, navigation }: Props) {
   const { servicioId } = route.params;
+  const { toast } = useFeedback();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
   const [ubicacion, setUbicacion] = useState<{ lat: number; lng: number } | null>(null);
   const [errorUbicacion, setErrorUbicacion] = useState<string | null>(null);
   const [direccion, setDireccion] = useState('');
@@ -22,14 +32,14 @@ export default function NuevaSolicitudScreen({ route, navigation }: Props) {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorUbicacion('Necesitamos permiso de ubicacion para pedir el servicio');
+        setErrorUbicacion('Necesitamos permiso de ubicación para pedir el servicio');
         return;
       }
       try {
         const pos = await Location.getCurrentPositionAsync({});
         setUbicacion({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       } catch {
-        setErrorUbicacion('No se pudo obtener tu ubicacion. Revisa el GPS.');
+        setErrorUbicacion('No se pudo obtener tu ubicación. Revisá el GPS.');
       }
     })();
   }, []);
@@ -45,82 +55,94 @@ export default function NuevaSolicitudScreen({ route, navigation }: Props) {
         direccion: direccion.trim() || undefined,
         descripcion: descripcion.trim() || undefined,
       });
+      toast({ tipo: 'exito', titulo: '¡Pedido enviado!', mensaje: 'Estamos buscando un gomero cerca tuyo.' });
       navigation.replace('SolicitudDetalle', { solicitudId: solicitud.id });
     } catch (err) {
-      Alert.alert('No se pudo crear la solicitud', getErrorMessage(err));
+      toast({ tipo: 'error', titulo: 'No se pudo crear la solicitud', mensaje: getErrorMessage(err) });
     } finally {
       setEnviando(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ padding: spacing.xl, paddingTop: insets.top + spacing.xxl, paddingBottom: spacing.huge }}
+    >
       <Text style={styles.titulo}>Confirmar solicitud</Text>
 
-      {!ubicacion && !errorUbicacion && (
-        <View style={styles.estadoUbicacion}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.estadoTexto}>Obteniendo tu ubicacion...</Text>
+      {!ubicacion && !errorUbicacion && <LoadingView texto="Obteniendo tu ubicación..." fullscreen={false} />}
+
+      {errorUbicacion && (
+        <View style={styles.avisoError}>
+          <Ionicons name="warning-outline" size={18} color={colors.danger} />
+          <Text style={styles.avisoErrorTexto}>{errorUbicacion}</Text>
         </View>
       )}
 
-      {errorUbicacion && <Text style={styles.error}>{errorUbicacion}</Text>}
-
       {ubicacion && (
-        <Text style={styles.ubicacionOk}>
-          📍 Ubicacion detectada ({ubicacion.lat.toFixed(4)}, {ubicacion.lng.toFixed(4)})
-        </Text>
+        <View style={styles.avisoOk}>
+          <Ionicons name="location" size={18} color={colors.success} />
+          <Text style={styles.avisoOkTexto}>
+            Ubicación detectada ({ubicacion.lat.toFixed(4)}, {ubicacion.lng.toFixed(4)})
+          </Text>
+        </View>
       )}
 
-      <Text style={styles.label}>Direccion / referencia (opcional)</Text>
-      <TextInput
-        style={styles.input}
+      <Input
+        label="Dirección / referencia (opcional)"
+        icon="location-outline"
         value={direccion}
         onChangeText={setDireccion}
-        placeholder="Ej: Av. Colon 500, frente a la plaza"
-        placeholderTextColor={colors.textMuted}
+        placeholder="Ej: Av. Colón 500, frente a la plaza"
       />
 
-      <Text style={styles.label}>Descripcion del problema (opcional)</Text>
-      <TextInput
-        style={[styles.input, styles.textarea]}
+      <Input
+        label="Descripción del problema (opcional)"
+        icon="chatbox-ellipses-outline"
         value={descripcion}
         onChangeText={setDescripcion}
         placeholder="Ej: rueda delantera derecha pinchada"
-        placeholderTextColor={colors.textMuted}
         multiline
+        style={styles.textarea}
       />
 
       <Button
         title="Pedir gomero"
+        icon="send-outline"
         onPress={confirmar}
         loading={enviando}
         disabled={!ubicacion}
         style={styles.button}
       />
-    </View>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, padding: 20, paddingTop: 60 },
-  titulo: { fontSize: 22, fontWeight: '800', color: colors.secondary, marginBottom: 16 },
-  estadoUbicacion: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  estadoTexto: { color: colors.textMuted },
-  error: { color: colors.danger, marginBottom: 16 },
-  ubicacionOk: { color: colors.success, marginBottom: 16, fontSize: 13 },
-  label: { fontSize: 13, fontWeight: '600', color: colors.secondary, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    backgroundColor: colors.surface,
-    marginBottom: 16,
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  titulo: { ...typography.title, color: colors.secondary, marginBottom: spacing.lg },
+  avisoError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerLight,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
   },
+  avisoErrorTexto: { ...typography.smallStrong, color: colors.danger, flexShrink: 1 },
+  avisoOk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.successLight,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+  },
+  avisoOkTexto: { ...typography.smallStrong, color: colors.success, flexShrink: 1 },
   textarea: { minHeight: 80, textAlignVertical: 'top' },
-  button: { marginTop: 8 },
+  button: { marginTop: spacing.sm },
 });

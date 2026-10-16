@@ -1,20 +1,20 @@
 {
   "expo": {
-    "name": "Gomeria Movil",
+    "name": "Gomería Móvil",
     "slug": "gomeria-movil",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Usamos tu ubicacion para conectarte con gomeros cercanos y que puedan encontrarte."
+        "NSLocationWhenInUseUsageDescription": "Usamos tu ubicación para conectarte con gomeros cercanos y que puedan encontrarte."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#EA580C",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -22,13 +22,16 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyCWEUbeG9nkgsDWQ8DsR0oSX3_krj6uaVY"
         }
-      }
+      },
+      "package": "com.anonymous.gomeriamovil"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,9 +41,28 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Usamos tu ubicacion para conectarte con gomeros cercanos y que puedan encontrarte."
+          "locationWhenInUsePermission": "Usamos tu ubicación para conectarte con gomeros cercanos y que puedan encontrarte."
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#EA580C",
+          "dark": {
+            "backgroundColor": "#C2410C"
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#EA580C"
+        }
+      ],
+      "expo-font"
     ]
   }
 }

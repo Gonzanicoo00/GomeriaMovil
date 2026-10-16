@@ -17,11 +17,15 @@ CREATE TABLE IF NOT EXISTS usuarios (
     telefono VARCHAR(30) NULL,
     rol ENUM('cliente', 'gomero', 'admin') NOT NULL DEFAULT 'cliente',
     foto_perfil VARCHAR(255) NULL,
+    push_token VARCHAR(255) NULL,
     activo TINYINT(1) NOT NULL DEFAULT 1,
     fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_usuarios_rol (rol)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Compatibilidad con bases ya creadas antes de agregar push_token.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS push_token VARCHAR(255) NULL;
 
 -- =========================================================
 -- gomeros: datos especificos del prestador de servicio,
@@ -168,9 +172,9 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- Datos iniciales: catalogo base de servicios
 -- =========================================================
 INSERT INTO servicios (nombre, descripcion, precio_base, icono) VALUES
-    ('Cambio de neumatico', 'Reemplazo de neumatico danado por el de auxilio', 3000.00, 'tire'),
-    ('Reparacion de pinchadura', 'Parche o reparacion de pinchadura en el lugar', 2000.00, 'patch'),
-    ('Inflado de neumaticos', 'Ajuste de presion de aire en los cuatro neumaticos', 1000.00, 'air'),
+    ('Cambio de neumático', 'Reemplazo de neumático dañado por el de auxilio', 3000.00, 'tire'),
+    ('Reparación de pinchadura', 'Parche o reparación de pinchadura en el lugar', 2000.00, 'patch'),
+    ('Inflado de neumáticos', 'Ajuste de presión de aire en los cuatro neumáticos', 1000.00, 'air'),
     ('Auxilio con llave de tuercas', 'Asistencia para aflojar tuercas trabadas', 1500.00, 'wrench'),
-    ('Revision general', 'Chequeo de estado de neumaticos y presion', 1200.00, 'inspect')
+    ('Revisión general', 'Chequeo de estado de neumáticos y presión', 1200.00, 'inspect')
 ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);

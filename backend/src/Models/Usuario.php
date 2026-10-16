@@ -68,6 +68,12 @@ class Usuario
         $stmt->execute(['password' => $hashedPassword, 'id' => $id]);
     }
 
+    public static function updatePushToken(int $id, ?string $pushToken): void
+    {
+        $stmt = Database::connection()->prepare('UPDATE usuarios SET push_token = :push_token WHERE id = :id');
+        $stmt->execute(['push_token' => $pushToken, 'id' => $id]);
+    }
+
     public static function toPublicArray(array $user): array
     {
         unset($user['password']);
