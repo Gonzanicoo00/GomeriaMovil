@@ -68,7 +68,8 @@
           "color": "#EA580C"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-status-bar"
     ]
   }
 }

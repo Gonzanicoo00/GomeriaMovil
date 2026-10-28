@@ -1,6 +1,12 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  GestureDetector,
+  PanGestureConfig,
+  useExclusiveGestures,
+  usePanGesture,
+  useTapGesture,
+} from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -32,46 +38,48 @@ export function BottomSheet({ alturaColapsada, alturaExpandida, encabezado, chil
   const y = useSharedValue(recorrido);
   const inicio = useSharedValue(0);
 
-  // Cada GestureDetector necesita su propia instancia del gesto, por eso se crean con una funcion.
-  const gestos = useMemo(() => {
-    const crearArrastre = () =>
-      Gesture.Pan()
-        .activeOffsetY([-8, 8])
-        .onBegin(() => {
-          inicio.value = y.value;
-        })
-        .onUpdate((e) => {
-          const destino = inicio.value + e.translationY;
-          // un poco de resistencia si se pasa de los limites
-          if (destino < 0) y.value = destino * 0.25;
-          else if (destino > recorrido) y.value = recorrido + (destino - recorrido) * 0.25;
-          else y.value = destino;
-        })
-        .onEnd((e) => {
-          let destino: number;
-          if (e.velocityY > 600) destino = recorrido;
-          else if (e.velocityY < -600) destino = 0;
-          else destino = y.value > recorrido / 2 ? recorrido : 0;
-          y.value = withSpring(destino, RESORTE);
-        });
+  // Cada GestureDetector necesita su propia instancia del gesto, por eso hay dos arrastres con la misma config.
+  const arrastre: PanGestureConfig = {
+    activeOffsetY: [-8, 8],
+    onBegin: () => {
+      inicio.value = y.value;
+    },
+    onUpdate: (e) => {
+      const destino = inicio.value + e.translationY;
+      // un poco de resistencia si se pasa de los limites
+      if (destino < 0) y.value = destino * 0.25;
+      else if (destino > recorrido) y.value = recorrido + (destino - recorrido) * 0.25;
+      else y.value = destino;
+    },
+    onDeactivate: (e) => {
+      let destino: number;
+      if (e.velocityY > 600) destino = recorrido;
+      else if (e.velocityY < -600) destino = 0;
+      else destino = y.value > recorrido / 2 ? recorrido : 0;
+      y.value = withSpring(destino, RESORTE);
+    },
+  };
+  const arrastreManija = usePanGesture(arrastre);
+  const arrastreEncabezado = usePanGesture(arrastre);
 
-    const toque = Gesture.Tap().onEnd(() => {
+  const toque = useTapGesture({
+    onDeactivate: () => {
       y.value = withSpring(y.value > recorrido / 2 ? 0 : recorrido, RESORTE);
-    });
+    },
+  });
 
-    return { manija: Gesture.Exclusive(crearArrastre(), toque), encabezado: crearArrastre() };
-  }, [recorrido, inicio, y]);
+  const gestoManija = useExclusiveGestures(arrastreManija, toque);
 
   const animado = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 
   return (
     <Animated.View style={[styles.sheet, { height: alturaExpandida }, animado]}>
-      <GestureDetector gesture={gestos.manija}>
+      <GestureDetector gesture={gestoManija}>
         <View style={styles.manijaZona} accessibilityRole="adjustable" accessibilityLabel="Deslizá para ver más detalles">
           <View style={styles.manija} />
         </View>
       </GestureDetector>
-      <GestureDetector gesture={gestos.encabezado}>
+      <GestureDetector gesture={arrastreEncabezado}>
         <View>{encabezado}</View>
       </GestureDetector>
       <ScrollView

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { AnimatedRegion, MapMarker, Marker, MarkerAnimated, MapStyleElement } from 'react-native-maps';
+import { AnimatedRegion, MapMarker, MapMarkerProps, Marker, MarkerAnimated, MapStyleElement } from 'react-native-maps';
 import { useTheme } from '../context/ThemeContext';
 import { shadow } from '../theme';
 
@@ -36,6 +36,12 @@ export function GomeroPin({ coordinate, title }: PinProps) {
   );
 }
 
+// El tipo que trae react-native-maps para MarkerAnimated no expone las props del marcador (ni children)
+// con los tipos de React Native 0.88, asi que se re-tipa aca.
+const MarcadorAnimado = MarkerAnimated as unknown as React.ComponentType<
+  Omit<MapMarkerProps, 'coordinate'> & { coordinate: AnimatedRegion; ref?: React.Ref<MapMarker> }
+>;
+
 // Un poco menos que el intervalo del polling de tracking (3 s): el pin llega justo antes de la siguiente posicion.
 const DURACION_MOVIMIENTO = 2800;
 
@@ -64,11 +70,11 @@ export function GomeroPinAnimado({ coordinate, title }: PinProps) {
   }, [coordinate.latitude, coordinate.longitude]);
 
   return (
-    <MarkerAnimated ref={markerRef as any} coordinate={region as any} title={title} anchor={{ x: 0.5, y: 0.5 }}>
+    <MarcadorAnimado ref={markerRef} coordinate={region} title={title} anchor={{ x: 0.5, y: 0.5 }}>
       <View style={[styles.pin, styles.pinGomero, { backgroundColor: colors.secondary, borderColor: colors.surface }]}>
         <MaterialCommunityIcons name="car-wrench" size={20} color={colors.background} />
       </View>
-    </MarkerAnimated>
+    </MarcadorAnimado>
   );
 }
 
