@@ -10,7 +10,7 @@ interface Props {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: 'primary' | 'outline' | 'danger';
+  variant?: 'primary' | 'outline' | 'danger' | 'outlineDanger';
   icon?: keyof typeof Ionicons.glyphMap;
   style?: ViewStyle;
 }
@@ -18,10 +18,11 @@ interface Props {
 export function Button({ title, onPress, loading, disabled, variant = 'primary', icon, style }: Props) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const isOutline = variant === 'outline';
+  const isOutlineDanger = variant === 'outlineDanger';
+  const isOutline = variant === 'outline' || isOutlineDanger;
   const isDanger = variant === 'danger';
-  const iconColor = isOutline ? colors.primary : '#fff';
-  const rippleColor = isOutline ? colors.primaryLight : 'rgba(255,255,255,0.25)';
+  const iconColor = isOutlineDanger ? colors.danger : isOutline ? colors.primary : colors.onPrimary;
+  const rippleColor = isOutlineDanger ? colors.dangerLight : isOutline ? colors.primaryLight : 'rgba(255,255,255,0.25)';
 
   return (
     <Pressable
@@ -35,6 +36,7 @@ export function Button({ title, onPress, loading, disabled, variant = 'primary',
         styles.base,
         isOutline && styles.outline,
         isDanger && styles.danger,
+        isOutlineDanger && styles.outlineDanger,
         (disabled || loading) && styles.disabled,
         pressed && !disabled && !loading && styles.pressed,
         style,
@@ -45,7 +47,7 @@ export function Button({ title, onPress, loading, disabled, variant = 'primary',
       ) : (
         <>
           {icon && <Ionicons name={icon} size={18} color={iconColor} style={styles.icon} />}
-          <Text style={[styles.text, isOutline && styles.textOutline]}>{title}</Text>
+          <Text style={[styles.text, isOutline && styles.textOutline, isOutlineDanger && styles.textOutlineDanger]}>{title}</Text>
         </>
       )}
     </Pressable>
@@ -75,6 +77,9 @@ const createStyles = (colors: ThemeColors) =>
     danger: {
       backgroundColor: colors.danger,
     },
+    outlineDanger: {
+      borderColor: colors.danger,
+    },
     disabled: {
       opacity: 0.5,
       shadowOpacity: 0,
@@ -88,9 +93,12 @@ const createStyles = (colors: ThemeColors) =>
     text: {
       ...typography.subheading,
       fontSize: 16,
-      color: '#fff',
+      color: colors.onPrimary,
     },
     textOutline: {
       color: colors.primary,
+    },
+    textOutlineDanger: {
+      color: colors.danger,
     },
   });

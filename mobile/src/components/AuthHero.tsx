@@ -1,13 +1,14 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { radius, spacing } from '../theme';
 
 /**
- * Encabezado naranja con circulos decorativos para login y registro.
+ * Encabezado naranja (degradado) con circulos decorativos para login y registro.
  * Mientras la pantalla esta enfocada, la barra de estado pasa a iconos blancos.
  */
 export function AuthHero({ children, compacto = false }: { children: React.ReactNode; compacto?: boolean }) {
@@ -19,11 +20,12 @@ export function AuthHero({ children, compacto = false }: { children: React.React
     <View
       style={[
         styles.hero,
-        { backgroundColor: colors.primary, paddingTop: insets.top + (compacto ? spacing.xl : spacing.huge) },
+        { backgroundColor: colors.heroEnd, paddingTop: insets.top + (compacto ? spacing.xl : spacing.huge) },
         compacto && styles.compacto,
       ]}
     >
       {enfocada && <StatusBar style="light" />}
+      <LinearGradient colors={[colors.heroStart, colors.heroEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={[styles.circulo, styles.circuloGrande]} />
       <View style={[styles.circulo, styles.circuloChico]} />
       {children}

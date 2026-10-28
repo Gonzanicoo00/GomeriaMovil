@@ -115,7 +115,7 @@ function Toast({ tipo = 'info', titulo, mensaje, onHide }: ToastOpciones & { onH
     >
       <Pressable
         onPress={ocultar}
-        style={[styles.toast, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.toast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
         accessibilityRole="alert"
       >
         <View style={[styles.toastIcono, { backgroundColor: estilo.fondo }]}>
@@ -203,14 +203,14 @@ const styles = StyleSheet.create({
 
 const createSheetStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15,23,42,0.45)' },
+    backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlay },
     sheet: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
       alignItems: 'center',
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceElevated,
       borderTopLeftRadius: radius.xxl,
       borderTopRightRadius: radius.xxl,
       paddingHorizontal: spacing.xxl,

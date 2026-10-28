@@ -1,8 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeColors, shadow, spacing, typography } from '../theme';
+import { LogoMark } from './LogoMark';
 
 interface Props {
   size?: number;
@@ -14,18 +15,19 @@ interface Props {
 export function Logo({ size = 64, showText = false, light = false }: Props) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
+  const forma = { width: size, height: size, borderRadius: size * 0.3 };
 
   return (
     <View style={styles.wrapper}>
-      <View
-        style={[
-          styles.badge,
-          { width: size, height: size, borderRadius: size / 2 },
-          light && styles.badgeLight,
-        ]}
-      >
-        <Ionicons name="car-sport" size={size * 0.52} color={light ? colors.primary : '#fff'} />
-      </View>
+      {light ? (
+        <View style={[styles.badge, styles.badgeLight, forma]}>
+          <LogoMark size={size * 0.72} color={colors.heroEnd} />
+        </View>
+      ) : (
+        <LinearGradient colors={[colors.heroStart, colors.heroEnd]} style={[styles.badge, forma]}>
+          <LogoMark size={size * 0.72} color={colors.onPrimary} />
+        </LinearGradient>
+      )}
       {showText && (
         <View style={styles.textWrap}>
           <Text style={[styles.title, light && styles.textLight]}>Gomería Móvil</Text>
@@ -40,13 +42,12 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     wrapper: { alignItems: 'center' },
     badge: {
-      backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
       ...shadow.raised,
     },
-    badgeLight: { backgroundColor: '#fff' },
-    textLight: { color: '#fff' },
+    badgeLight: { backgroundColor: colors.onPrimary },
+    textLight: { color: colors.onPrimary },
     subtitleLight: { color: 'rgba(255,255,255,0.85)' },
     textWrap: { alignItems: 'center', marginTop: spacing.lg },
     title: { ...typography.display, color: colors.secondary },

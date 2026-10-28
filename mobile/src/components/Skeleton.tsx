@@ -1,23 +1,17 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
-import { Animated, DimensionValue, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import React, { createContext, useContext, useEffect } from 'react';
+import { DimensionValue, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import Animated, { SharedValue, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeColors, radius, shadow, spacing } from '../theme';
 
 // Un solo valor animado compartido para que todos los bloques "respiren" sincronizados.
-const PulsoContext = createContext<Animated.Value | null>(null);
+const PulsoContext = createContext<SharedValue<number> | null>(null);
 
 export function SkeletonGroup({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  const pulso = useRef(new Animated.Value(0)).current;
+  const pulso = useSharedValue(0);
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulso, { toValue: 1, duration: 750, useNativeDriver: true }),
-        Animated.timing(pulso, { toValue: 0, duration: 750, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
+    pulso.value = withRepeat(withTiming(1, { duration: 750 }), -1, true);
   }, [pulso]);
 
   return (
@@ -40,11 +34,11 @@ interface BoneProps {
 export function Bone({ width = '100%', height = 12, rounded = radius.sm, style }: BoneProps) {
   const { colors } = useTheme();
   const pulso = useContext(PulsoContext);
-  const opacity = pulso ? pulso.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) : 1;
+  const animado = useAnimatedStyle(() => ({ opacity: pulso ? 0.55 + 0.45 * pulso.value : 1 }));
 
   return (
     <Animated.View
-      style={[{ width, height, borderRadius: rounded, backgroundColor: colors.border, opacity }, style]}
+      style={[{ width, height, borderRadius: rounded, backgroundColor: colors.border }, animado, style]}
     />
   );
 }
@@ -97,32 +91,31 @@ export function ServicioSkeleton() {
   );
 }
 
-/** Esqueleto de la pantalla de detalle de una solicitud. */
+/** Esqueleto de las pantallas de seguimiento: mapa de fondo y panel inferior. */
 export function DetalleSkeleton() {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
   return (
     <SkeletonGroup style={styles.detalle}>
-      <Bone width="65%" height={24} />
-      <Bone width="45%" height={12} style={styles.mt} />
-      <View style={[styles.card, styles.mtXl]}>
-        <Bone width="50%" height={16} />
-        <Bone width="85%" height={10} style={styles.mt} />
+      <View style={[StyleSheet.absoluteFill, styles.mapaFondo]} />
+      <View style={styles.panel}>
+        <View style={styles.manija} />
+        <Bone width="55%" height={22} />
+        <Bone width="80%" height={12} style={styles.mt} />
         <View style={[styles.row, styles.mtXl, styles.entre]}>
           {Array.from({ length: 5 }, (_, i) => (
             <Bone key={i} width={30} height={30} rounded={15} />
           ))}
         </View>
-      </View>
-      <View style={[styles.card, styles.row]}>
-        <Bone width={44} height={44} rounded={22} />
-        <View style={styles.flex}>
-          <Bone width="55%" height={14} />
-          <Bone width="35%" height={10} style={styles.mt} />
+        <View style={[styles.card, styles.row, styles.mtXl]}>
+          <Bone width={48} height={48} rounded={24} />
+          <View style={styles.flex}>
+            <Bone width="55%" height={14} />
+            <Bone width="35%" height={10} style={styles.mt} />
+          </View>
         </View>
       </View>
-      <Bone height={280} rounded={radius.lg} />
     </SkeletonGroup>
   );
 }
@@ -148,10 +141,27 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: spacing.md,
       paddingTop: spacing.md,
       borderTopWidth: 1,
-      borderTopColor: colors.background,
+      borderTopColor: colors.border,
     },
     servicio: { marginBottom: 0 },
-    detalle: { padding: spacing.xl, paddingTop: spacing.lg },
+    detalle: { flex: 1, backgroundColor: colors.background, justifyContent: 'flex-end' },
+    mapaFondo: { backgroundColor: colors.border, opacity: 0.5 },
+    panel: {
+      backgroundColor: colors.surfaceElevated,
+      borderTopLeftRadius: radius.xxl,
+      borderTopRightRadius: radius.xxl,
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.huge,
+    },
+    manija: {
+      alignSelf: 'center',
+      width: 40,
+      height: 5,
+      borderRadius: radius.pill,
+      backgroundColor: colors.border,
+      marginTop: spacing.md,
+      marginBottom: spacing.xl,
+    },
     mt: { marginTop: spacing.sm },
     mtLg: { marginTop: spacing.md },
     mtXl: { marginTop: spacing.lg },

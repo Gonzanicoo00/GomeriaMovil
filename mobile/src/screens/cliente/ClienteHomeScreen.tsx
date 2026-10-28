@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Servicio, Solicitud } from '../../types';
 import * as ServiciosApi from '../../api/servicios';
@@ -13,26 +14,20 @@ import { useFeedback } from '../../context/FeedbackContext';
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
-import { FadeIn, PulseDot } from '../../components/Animated';
+import { FadeIn, PressableScale, PulseDot } from '../../components/Animated';
+import { IconButton } from '../../components/IconButton';
 import { ServicioSkeleton, SkeletonGroup } from '../../components/Skeleton';
 import { ProfileSheet } from '../../components/ProfileSheet';
 import { getErrorMessage } from '../../api/client';
 import { useTheme } from '../../context/ThemeContext';
-import { ThemeColors, estadoLabel, radius, shadow, spacing, typography } from '../../theme';
+import { ThemeColors, estadoLabel, radius, shadow, spacing, tabular, typography } from '../../theme';
 import { formatPrecio } from '../../utils/format';
+import { iconoServicio } from '../../utils/servicios';
 import { ClienteStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ClienteStackParamList, 'ClienteHome'>;
 
 const ESTADOS_ACTIVOS = ['pendiente', 'asignada', 'en_camino', 'en_proceso'];
-
-const ICONO_SERVICIO: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  tire: 'tire',
-  patch: 'car-tire-alert',
-  air: 'gauge',
-  wrench: 'wrench',
-  inspect: 'magnify-scan',
-};
 
 export default function ClienteHomeScreen({ navigation }: Props) {
   const { usuario, logout } = useAuth();
@@ -100,26 +95,25 @@ export default function ClienteHomeScreen({ navigation }: Props) {
           solicitudActiva && styles.heroConActiva,
         ]}
       >
+        <LinearGradient
+          colors={[colors.heroStart, colors.heroEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         {/* Circulos decorativos de fondo */}
         <View style={[styles.circulo, styles.circuloGrande]} />
         <View style={[styles.circulo, styles.circuloChico]} />
 
         <View style={styles.heroTop}>
-          <Pressable style={styles.perfilBtn} onPress={() => setPerfilAbierto(true)} hitSlop={8}>
+          <PressableScale style={styles.perfilBtn} onPress={() => setPerfilAbierto(true)} hitSlop={8} accessibilityLabel="Abrir perfil">
             <Avatar nombre={usuario?.nombre} apellido={usuario?.apellido} size={40} style={styles.avatar} />
             <View>
               <Text style={styles.heroSaludo}>Hola,</Text>
               <Text style={styles.heroNombre} numberOfLines={1}>{usuario?.nombre}</Text>
             </View>
-          </Pressable>
-          <Pressable
-            style={styles.heroIconBtn}
-            onPress={() => navigation.navigate('Historial')}
-            android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true, radius: 22 }}
-            accessibilityLabel="Ver historial"
-          >
-            <Ionicons name="time-outline" size={22} color="#fff" />
-          </Pressable>
+          </PressableScale>
+          <IconButton icon="time-outline" variante="vidrio" onPress={() => navigation.navigate('Historial')} accessibilityLabel="Ver historial" />
         </View>
 
         <Text style={styles.heroTitulo}>¿Qué necesitás hoy?</Text>
@@ -127,10 +121,9 @@ export default function ClienteHomeScreen({ navigation }: Props) {
       </View>
 
       {solicitudActiva && (
-        <Pressable
+        <PressableScale
           style={styles.activa}
           onPress={() => navigation.navigate('SolicitudDetalle', { solicitudId: solicitudActiva.id })}
-          android_ripple={{ color: colors.primaryLight }}
         >
           <View style={styles.activaIcono}>
             <Ionicons name="pulse" size={22} color={colors.primary} />
@@ -143,7 +136,7 @@ export default function ClienteHomeScreen({ navigation }: Props) {
             <Text style={styles.activaTitulo} numberOfLines={1}>{solicitudActiva.servicio_nombre}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </Pressable>
+        </PressableScale>
       )}
 
       <View style={styles.seccionRow}>
@@ -180,15 +173,14 @@ export default function ClienteHomeScreen({ navigation }: Props) {
         }
         renderItem={({ item, index }) => !item ? <View style={styles.relleno} /> : (
           <FadeIn index={index} style={styles.relleno}>
-            <Pressable
+            <PressableScale
               style={[styles.servicioCard, !!solicitudActiva && styles.disabled]}
               disabled={!!solicitudActiva}
               onPress={() => navigation.navigate('NuevaSolicitud', { servicioId: item.id })}
-              android_ripple={{ color: colors.primaryLight }}
             >
               <View style={styles.servicioIcono}>
                 <MaterialCommunityIcons
-                  name={ICONO_SERVICIO[item.icono ?? ''] ?? 'car-wrench'}
+                  name={iconoServicio(item.icono)}
                   size={28}
                   color={colors.primary}
                 />
@@ -199,7 +191,7 @@ export default function ClienteHomeScreen({ navigation }: Props) {
                 <Text style={styles.servicioDesde}>desde</Text>
                 <Text style={styles.servicioPrecio}>{formatPrecio(item.precio_base)}</Text>
               </View>
-            </Pressable>
+            </PressableScale>
           </FadeIn>
         )}
       />
@@ -220,7 +212,7 @@ const createStyles = (colors: ThemeColors) =>
     container: { flex: 1, backgroundColor: colors.background },
     lista: { flexGrow: 1 },
     hero: {
-      backgroundColor: colors.primary,
+      backgroundColor: colors.heroEnd,
       paddingHorizontal: spacing.xl,
       paddingBottom: spacing.xxxl,
       borderBottomLeftRadius: radius.xxl,
@@ -240,16 +232,8 @@ const createStyles = (colors: ThemeColors) =>
     perfilBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 1 },
     avatar: { borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)' },
     heroSaludo: { ...typography.caption, color: 'rgba(255,255,255,0.8)' },
-    heroNombre: { ...typography.subheading, color: '#fff' },
-    heroIconBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: 'rgba(255,255,255,0.18)',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    heroTitulo: { ...typography.display, color: '#fff' },
+    heroNombre: { ...typography.subheading, color: colors.onPrimary },
+    heroTitulo: { ...typography.display, color: colors.onPrimary },
     heroSubtitulo: { ...typography.small, color: 'rgba(255,255,255,0.85)', marginTop: spacing.xs },
     activa: {
       flexDirection: 'row',
@@ -258,7 +242,7 @@ const createStyles = (colors: ThemeColors) =>
       marginHorizontal: spacing.xl,
       marginTop: -spacing.huge,
       padding: spacing.lg,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceElevated,
       borderRadius: radius.lg,
       ...shadow.raised,
     },
@@ -307,9 +291,11 @@ const createStyles = (colors: ThemeColors) =>
     relleno: { flex: 1 },
     filaSkeleton: { flexDirection: 'row' },
     disabled: { opacity: 0.5 },
-    servicioNombre: { ...typography.subheading, color: colors.text, minHeight: 40 },
-    servicioDesc: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs, minHeight: 32 },
-    servicioPie: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginTop: spacing.md },
+    servicioNombre: { ...typography.subheading, color: colors.text },
+    servicioDesc: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
+    // marginTop auto empuja el precio al fondo: en cada fila los precios quedan alineados
+    // aunque los textos ocupen distinta cantidad de lineas (o la fuente del sistema este agrandada).
+    servicioPie: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs, marginTop: 'auto', paddingTop: spacing.md },
     servicioDesde: { ...typography.caption, color: colors.textMuted },
-    servicioPrecio: { ...typography.subheading, color: colors.primary },
+    servicioPrecio: { ...typography.subheading, ...tabular, color: colors.primary },
   });

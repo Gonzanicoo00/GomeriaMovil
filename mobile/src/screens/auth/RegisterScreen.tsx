@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthHero } from '../../components/AuthHero';
+import { PressableScale } from '../../components/Animated';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Logo } from '../../components/Logo';
@@ -187,17 +188,18 @@ function RolOption({
   const styles = createStyles(colors);
 
   return (
-    <Pressable
+    <PressableScale
       onPress={() => {
         haptics.seleccion();
         onPress();
       }}
       style={[styles.rolOption, active && styles.rolOptionActive]}
-      android_ripple={{ color: colors.primaryLight }}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
     >
       <Ionicons name={icon} size={18} color={active ? colors.primary : colors.textMuted} />
       <Text style={[styles.rolOptionText, active && styles.rolOptionTextActive]}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -215,7 +217,7 @@ const createStyles = (colors: ThemeColors) =>
     paddingTop: spacing.xxl,
   },
   label: { ...typography.smallStrong, color: colors.secondary, marginBottom: spacing.sm },
-  title: { ...typography.title, color: '#fff', marginTop: spacing.md, textAlign: 'center' },
+  title: { ...typography.title, color: colors.onPrimary, marginTop: spacing.md, textAlign: 'center' },
   heroSub: { ...typography.small, color: 'rgba(255,255,255,0.85)', marginTop: spacing.xs },
   rolSelector: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl },
   rolOption: {

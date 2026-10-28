@@ -42,3 +42,14 @@ export function formatPrecio(valor: string | number | null | undefined): string 
   const n = typeof valor === 'string' ? parseFloat(valor) : valor ?? 0;
   return `$${Math.round(n || 0).toLocaleString('es-AR')}`;
 }
+
+/** Tiempo entre dos fechas del backend, por ejemplo "35 min" o "1 h 10 min". */
+export function formatDuracion(desde: string | null, hasta: string | null): string | null {
+  if (!desde || !hasta) return null;
+  const min = Math.round((new Date(hasta.replace(' ', 'T')).getTime() - new Date(desde.replace(' ', 'T')).getTime()) / 60000);
+  if (!isFinite(min) || min < 0) return null;
+  if (min < 60) return `${Math.max(1, min)} min`;
+  const h = Math.floor(min / 60);
+  const resto = min % 60;
+  return resto ? `${h} h ${resto} min` : `${h} h`;
+}

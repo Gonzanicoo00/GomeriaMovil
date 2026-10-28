@@ -1,32 +1,39 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Linking, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import MapView from 'react-native-maps';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
-import { Chat } from '../../components/Chat';
 import { Avatar } from '../../components/Avatar';
+import { BottomSheet } from '../../components/BottomSheet';
+import { Calificacion } from '../../components/Calificacion';
+import { IconButton } from '../../components/IconButton';
+import { PulseDot } from '../../components/Animated';
 import { DetalleSkeleton } from '../../components/Skeleton';
 import { ErrorState } from '../../components/ErrorState';
-import { EstadoTimeline } from '../../components/EstadoTimeline';
-import { ClientePin, GomeroPin, mapStyleClaro, mapStyleOscuro } from '../../components/MapPins';
+import { DESCRIPCION_ESTADO, EstadoTimeline } from '../../components/EstadoTimeline';
+import { ServicioCompletado } from '../../components/ServicioCompletado';
+import { ClientePin, GomeroPinAnimado, mapStyleClaro, mapStyleOscuro } from '../../components/MapPins';
 import * as SolicitudesApi from '../../api/solicitudes';
 import * as TrackingApi from '../../api/tracking';
 import { getErrorMessage } from '../../api/client';
 import { usePolling } from '../../hooks/usePolling';
+import { useMensajesNoLeidos } from '../../hooks/useMensajesNoLeidos';
 import { useAuth } from '../../context/AuthContext';
 import { useFeedback } from '../../context/FeedbackContext';
 import { haptics } from '../../utils/haptics';
 import { useTheme } from '../../context/ThemeContext';
-import { ThemeColors, estadoLabel, radius, shadow, spacing, typography } from '../../theme';
+import { ThemeColors, estadoLabel, radius, spacing, tabular, typography } from '../../theme';
 import { Solicitud, UbicacionTracking } from '../../types';
-import { distanciaKm, estimarEtaMinutos, formatRelativeTime } from '../../utils/format';
+import { distanciaKm, estimarEtaMinutos, formatDuracion, formatPrecio, formatRelativeTime } from '../../utils/format';
 import { ClienteStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ClienteStackParamList, 'SolicitudDetalle'>;
 
 const CANCELABLES: Solicitud['estado'][] = ['pendiente', 'asignada', 'en_camino'];
+const CON_TRACKING: Solicitud['estado'][] = ['asignada', 'en_camino', 'en_proceso'];
 
 export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   const { solicitudId } = route.params;
@@ -35,13 +42,20 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const enfocada = useIsFocused();
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
   const [posicionGomero, setPosicionGomero] = useState<UbicacionTracking | null>(null);
-  const [puntuacion, setPuntuacion] = useState(0);
   const [enviandoCalificacion, setEnviandoCalificacion] = useState(false);
   const [yaCalifico, setYaCalifico] = useState(false);
+  const [exitoVisible, setExitoVisible] = useState(false);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const mapRef = useRef<MapView | null>(null);
+  // Mientras sea true el mapa se reencuadra solo; si el usuario lo mueve, deja de hacerlo hasta que toque "centrar".
+  const seguir = useRef(true);
+
+  const alturaColapsada = Math.min(330, height * 0.42) + insets.bottom;
+  const alturaExpandida = height * 0.86;
 
   const cargar = useCallback(async () => {
     try {
@@ -57,19 +71,25 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   usePolling(cargar, 4000);
 
   // Avisa con un toast y una vibracion cada vez que el gomero cambia el estado del pedido.
+  // Si el servicio termina con la pantalla abierta, se muestra la pantalla de exito.
   const estadoAnterior = useRef<Solicitud['estado'] | null>(null);
   useEffect(() => {
     const estado = solicitud?.estado;
     if (!estado) return;
     if (estadoAnterior.current && estadoAnterior.current !== estado) {
-      toast({ tipo: estado === 'completada' ? 'exito' : 'info', titulo: estadoLabel[estado] });
-      if (estado !== 'completada') haptics.exito();
+      if (estado === 'completada') {
+        haptics.exito();
+        setExitoVisible(true);
+      } else {
+        toast({ tipo: 'info', titulo: estadoLabel[estado] });
+        haptics.exito();
+      }
     }
     estadoAnterior.current = estado;
   }, [solicitud?.estado, toast]);
 
   const cargarPosicion = useCallback(async () => {
-    if (!solicitud || !['asignada', 'en_camino', 'en_proceso'].includes(solicitud.estado)) return;
+    if (!solicitud || !CON_TRACKING.includes(solicitud.estado)) return;
     try {
       const pos = await TrackingApi.ultimaPosicion(solicitudId);
       setPosicionGomero(pos);
@@ -80,17 +100,30 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
 
   usePolling(cargarPosicion, 3000, !!solicitud);
 
+  const mostrarChat = !!solicitud?.gomero_id && solicitud.estado !== 'cancelada';
+  const chatActivo = !!solicitud && !['completada', 'cancelada'].includes(solicitud.estado);
+  const noLeidos = useMensajesNoLeidos(solicitudId, usuario?.id, mostrarChat && chatActivo && enfocada);
+
+  const encuadrar = useCallback(
+    (animado = true) => {
+      if (!solicitud) return;
+      const cliente = { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) };
+      if (posicionGomero) {
+        mapRef.current?.fitToCoordinates(
+          [cliente, { latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) }],
+          { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: animado }
+        );
+      } else {
+        mapRef.current?.animateToRegion({ ...cliente, latitudeDelta: 0.01, longitudeDelta: 0.01 }, animado ? 400 : 0);
+      }
+    },
+    [solicitud?.latitud, solicitud?.longitud, posicionGomero]
+  );
+
   // Reencuadra el mapa para que cliente y gomero queden siempre visibles a medida que se mueve.
   useEffect(() => {
-    if (!solicitud || !posicionGomero) return;
-    mapRef.current?.fitToCoordinates(
-      [
-        { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) },
-        { latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) },
-      ],
-      { edgePadding: { top: 60, right: 60, bottom: 60, left: 60 }, animated: true }
-    );
-  }, [solicitud?.latitud, solicitud?.longitud, posicionGomero]);
+    if (seguir.current) encuadrar();
+  }, [encuadrar]);
 
   const cancelar = async () => {
     const ok = await confirmar({
@@ -115,21 +148,31 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
     }
   };
 
-  const enviarCalificacion = async () => {
-    if (!puntuacion) {
-      toast({ tipo: 'info', titulo: 'Elegí una puntuación', mensaje: 'Tocá las estrellas para calificar.' });
-      return;
-    }
+  const enviarCalificacion = async (puntuacion: number, comentario?: string) => {
     setEnviandoCalificacion(true);
     try {
-      await SolicitudesApi.calificarSolicitud(solicitudId, puntuacion);
+      await SolicitudesApi.calificarSolicitud(solicitudId, puntuacion, comentario);
       setYaCalifico(true);
+      setExitoVisible(false);
       haptics.exito();
+      toast({ tipo: 'exito', titulo: '¡Gracias por tu calificación!' });
     } catch (err) {
       toast({ tipo: 'error', titulo: 'No se pudo calificar', mensaje: getErrorMessage(err) });
     } finally {
       setEnviandoCalificacion(false);
     }
+  };
+
+  const abrirChat = () => {
+    if (!solicitud) return;
+    navigation.navigate('Chat', {
+      solicitudId,
+      nombre: solicitud.gomero_nombre,
+      apellido: solicitud.gomero_apellido,
+      rol: 'Tu gomero',
+      telefono: solicitud.gomero_telefono,
+      activo: chatActivo,
+    });
   };
 
   if (!solicitud && errorCarga) {
@@ -143,138 +186,184 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   const lat = parseFloat(solicitud.latitud);
   const lng = parseFloat(solicitud.longitud);
 
-  const mostrarChat = !!solicitud.gomero_id && solicitud.estado !== 'cancelada';
-
   let distancia: number | null = null;
   let etaMin: number | null = null;
-  if (posicionGomero) {
+  if (posicionGomero && solicitud.estado !== 'en_proceso') {
     distancia = distanciaKm(lat, lng, parseFloat(posicionGomero.latitud), parseFloat(posicionGomero.longitud));
     etaMin = estimarEtaMinutos(distancia);
   }
 
-  return (
-    <View style={styles.container}>
-      <ScrollView style={styles.header} contentContainerStyle={styles.content}>
-        <Text style={styles.servicio}>{solicitud.servicio_nombre}</Text>
-        {solicitud.direccion && (
-          <View style={styles.lineaConIcono}>
-            <Ionicons name="location-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.linea}>{solicitud.direccion}</Text>
-          </View>
-        )}
-        {solicitud.descripcion && <Text style={styles.descripcion}>“{solicitud.descripcion}”</Text>}
+  const duracion = formatDuracion(solicitud.fecha_inicio ?? solicitud.fecha_asignacion, solicitud.fecha_completado);
+  const resumen = [
+    { label: 'Servicio', valor: solicitud.servicio_nombre ?? '' },
+    ...(solicitud.gomero_nombre ? [{ label: 'Gomero', valor: `${solicitud.gomero_nombre} ${solicitud.gomero_apellido ?? ''}`.trim() }] : []),
+    ...(duracion ? [{ label: 'Duración', valor: duracion }] : []),
+    ...(solicitud.precio_final ? [{ label: 'Total', valor: formatPrecio(solicitud.precio_final), destacado: true }] : []),
+  ];
 
-        <View style={styles.bloque}>
-          <EstadoTimeline estado={solicitud.estado} />
+  const encabezado = (
+    <View style={styles.encabezado}>
+      <View style={styles.encabezadoTexto}>
+        <View style={styles.estadoFila}>
+          {CON_TRACKING.includes(solicitud.estado) || solicitud.estado === 'pendiente' ? (
+            <PulseDot color={solicitud.estado === 'pendiente' ? colors.warning : colors.success} />
+          ) : null}
+          <Text style={styles.estadoTitulo}>{estadoLabel[solicitud.estado]}</Text>
         </View>
-
-        {(distancia !== null || etaMin !== null) && (
-          <View style={styles.etaBox}>
-            <View style={styles.etaItem}>
-              <Ionicons name="navigate-outline" size={18} color={colors.primary} />
-              <Text style={styles.etaValor}>{distancia?.toFixed(1)} km</Text>
-              <Text style={styles.etaLabel}>de distancia</Text>
-            </View>
-            <View style={styles.etaDivider} />
-            <View style={styles.etaItem}>
-              <Ionicons name="time-outline" size={18} color={colors.primary} />
-              <Text style={styles.etaValor}>~{etaMin} min</Text>
-              <Text style={styles.etaLabel}>tiempo estimado</Text>
-            </View>
-          </View>
-        )}
-
-        {solicitud.gomero_nombre && (
-          <View style={styles.gomeroBox}>
-            <Avatar nombre={solicitud.gomero_nombre} apellido={solicitud.gomero_apellido} />
-            <View style={styles.gomeroInfo}>
-              <Text style={styles.gomeroNombre}>{solicitud.gomero_nombre} {solicitud.gomero_apellido}</Text>
-              <Text style={styles.gomeroRol}>Tu gomero asignado</Text>
-              {posicionGomero && (
-                <Text style={styles.gomeroActualizado}>
-                  Ubicación {formatRelativeTime(posicionGomero.registrado_en)}
-                </Text>
-              )}
-            </View>
-            {solicitud.gomero_telefono && (
-              <Pressable
-                style={styles.telBtn}
-                onPress={() => Linking.openURL(`tel:${solicitud.gomero_telefono}`)}
-                android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true, radius: 22 }}
-                accessibilityLabel="Llamar al gomero"
-              >
-                <Ionicons name="call" size={18} color="#fff" />
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        <View style={styles.mapWrapper}>
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            customMapStyle={isDark ? mapStyleOscuro : mapStyleClaro}
-            showsPointsOfInterests={false}
-            toolbarEnabled={false}
-            initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-          >
-            <ClientePin coordinate={{ latitude: lat, longitude: lng }} title="Tu ubicación" />
-            {posicionGomero && (
-              <GomeroPin
-                coordinate={{ latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) }}
-                title={solicitud.gomero_nombre ?? 'Gomero'}
-              />
-            )}
-          </MapView>
-        </View>
-
-        {CANCELABLES.includes(solicitud.estado) && (
-          <Button title="Cancelar solicitud" variant="danger" icon="close-circle-outline" onPress={cancelar} style={styles.cancelBtn} />
-        )}
-
-        {solicitud.estado === 'completada' && !yaCalifico && (
-          <View style={styles.calificarBox}>
-            <Text style={styles.calificarTitulo}>¿Cómo fue el servicio?</Text>
-            <Text style={styles.calificarSub}>Tu opinión ayuda a otros conductores.</Text>
-            <View style={styles.estrellas}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Ionicons
-                  key={n}
-                  name={n <= puntuacion ? 'star' : 'star-outline'}
-                  onPress={() => {
-                    haptics.seleccion();
-                    setPuntuacion(n);
-                  }}
-                  size={36}
-                  color={n <= puntuacion ? colors.warning : colors.border}
-                  suppressHighlighting
-                />
-              ))}
-            </View>
-            <Button title="Enviar calificación" onPress={enviarCalificacion} loading={enviandoCalificacion} />
-          </View>
-        )}
-        {yaCalifico && (
-          <View style={styles.graciasBox}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-            <Text style={styles.gracias}>¡Gracias por tu calificación!</Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {mostrarChat && (
-        <View style={[styles.chatBox, { marginBottom: insets.bottom + spacing.md }]}>
-          <View style={styles.chatHeader}>
-            <Ionicons name="chatbubbles-outline" size={16} color={colors.primary} />
-            <Text style={styles.seccion}>Chat con tu gomero</Text>
-          </View>
-          <Chat
-            solicitudId={solicitudId}
-            usuarioId={usuario!.id}
-            activo={!['completada', 'cancelada'].includes(solicitud.estado)}
-          />
+        <Text style={styles.estadoDescripcion} numberOfLines={2}>{DESCRIPCION_ESTADO[solicitud.estado]}</Text>
+      </View>
+      {etaMin !== null && (
+        <View style={styles.eta} accessibilityLabel={`Llega en unos ${etaMin} minutos`}>
+          <Text style={styles.etaValor}>{etaMin}</Text>
+          <Text style={styles.etaUnidad}>min</Text>
         </View>
       )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        customMapStyle={isDark ? mapStyleOscuro : mapStyleClaro}
+        showsPointsOfInterests={false}
+        toolbarEnabled={false}
+        mapPadding={{ top: insets.top + spacing.huge, right: 0, bottom: alturaColapsada - radius.xxl, left: 0 }}
+        initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
+        onPanDrag={() => {
+          seguir.current = false;
+        }}
+      >
+        <ClientePin coordinate={{ latitude: lat, longitude: lng }} title="Tu ubicación" />
+        {posicionGomero && (
+          <GomeroPinAnimado
+            coordinate={{ latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) }}
+            title={solicitud.gomero_nombre ?? 'Gomero'}
+          />
+        )}
+      </MapView>
+
+      <View style={[styles.barraSuperior, { top: insets.top + spacing.sm }]} pointerEvents="box-none">
+        <IconButton icon="chevron-back" onPress={() => navigation.goBack()} accessibilityLabel="Volver" />
+        <IconButton
+          icon="locate"
+          onPress={() => {
+            seguir.current = true;
+            encuadrar();
+          }}
+          accessibilityLabel="Centrar el mapa"
+        />
+      </View>
+
+      <BottomSheet alturaColapsada={alturaColapsada} alturaExpandida={alturaExpandida} encabezado={encabezado}>
+        <View style={styles.cuerpo}>
+          <EstadoTimeline estado={solicitud.estado} soloPasos />
+
+          {solicitud.gomero_nombre ? (
+            <View style={styles.persona}>
+              <Avatar nombre={solicitud.gomero_nombre} apellido={solicitud.gomero_apellido} size={48} />
+              <View style={styles.personaInfo}>
+                <Text style={styles.personaNombre} numberOfLines={1}>
+                  {solicitud.gomero_nombre} {solicitud.gomero_apellido}
+                </Text>
+                <Text style={styles.personaRol}>
+                  {posicionGomero && CON_TRACKING.includes(solicitud.estado)
+                    ? `Ubicación ${formatRelativeTime(posicionGomero.registrado_en)}`
+                    : 'Tu gomero asignado'}
+                  {distancia !== null ? ` · ${distancia.toFixed(1)} km` : ''}
+                </Text>
+              </View>
+              {mostrarChat && (
+                <IconButton icon="chatbubble-ellipses" variante="suave" onPress={abrirChat} badge={noLeidos} accessibilityLabel="Abrir chat con el gomero" />
+              )}
+              {solicitud.gomero_telefono && chatActivo ? (
+                <IconButton
+                  icon="call"
+                  variante="solido"
+                  color={colors.success}
+                  onPress={() => Linking.openURL(`tel:${solicitud.gomero_telefono}`)}
+                  accessibilityLabel="Llamar al gomero"
+                />
+              ) : null}
+            </View>
+          ) : solicitud.estado === 'pendiente' ? (
+            <View style={styles.buscando}>
+              <MaterialCommunityIcons name="radar" size={22} color={colors.warning} />
+              <Text style={styles.buscandoTexto}>Te avisamos apenas un gomero acepte tu pedido.</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.seccion}>
+            <Text style={styles.seccionTitulo}>Detalle del pedido</Text>
+            <View style={styles.dato}>
+              <View style={styles.datoIcono}>
+                <Ionicons name="construct-outline" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.datoTexto}>
+                <Text style={styles.datoValor}>{solicitud.servicio_nombre}</Text>
+                <Text style={styles.datoLabel}>Pedido {formatRelativeTime(solicitud.fecha_solicitud)}</Text>
+              </View>
+              {solicitud.precio_final || solicitud.precio_estimado ? (
+                <Text style={styles.precio}>{formatPrecio(solicitud.precio_final ?? solicitud.precio_estimado)}</Text>
+              ) : null}
+            </View>
+            {solicitud.direccion ? (
+              <View style={styles.dato}>
+                <View style={styles.datoIcono}>
+                  <Ionicons name="location-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.datoTexto}>
+                  <Text style={styles.datoValor}>{solicitud.direccion}</Text>
+                  <Text style={styles.datoLabel}>Dirección de referencia</Text>
+                </View>
+              </View>
+            ) : null}
+            {solicitud.descripcion ? (
+              <View style={styles.dato}>
+                <View style={styles.datoIcono}>
+                  <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.datoTexto}>
+                  <Text style={styles.datoValor}>{solicitud.descripcion}</Text>
+                  <Text style={styles.datoLabel}>Lo que contaste del problema</Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          {CANCELABLES.includes(solicitud.estado) && (
+            <Button title="Cancelar solicitud" variant="outlineDanger" icon="close-circle-outline" onPress={cancelar} style={styles.cancelBtn} />
+          )}
+
+          {solicitud.estado === 'completada' && !yaCalifico && (
+            <View style={styles.calificarBox}>
+              <Text style={styles.calificarTitulo}>¿Cómo fue el servicio?</Text>
+              <Text style={styles.calificarSub}>Tu opinión ayuda a otros conductores.</Text>
+              <Calificacion enviando={enviandoCalificacion} onEnviar={enviarCalificacion} />
+            </View>
+          )}
+          {yaCalifico && (
+            <View style={styles.graciasBox}>
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              <Text style={styles.gracias}>¡Gracias por tu calificación!</Text>
+            </View>
+          )}
+        </View>
+      </BottomSheet>
+
+      <ServicioCompletado
+        visible={exitoVisible}
+        titulo="¡Servicio completado!"
+        subtitulo="Ya podés seguir tu camino. Gracias por usar Gomería Móvil."
+        resumen={resumen}
+        textoCerrar="Ahora no"
+        onCerrar={() => setExitoVisible(false)}
+      >
+        <Text style={styles.calificarTitulo}>¿Cómo fue el servicio?</Text>
+        <Text style={styles.calificarSub}>Tu opinión ayuda a otros conductores.</Text>
+        <Calificacion enviando={enviandoCalificacion} onEnviar={enviarCalificacion} />
+      </ServicioCompletado>
     </View>
   );
 }
@@ -282,105 +371,91 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { flexShrink: 1 },
-    content: { padding: spacing.xl, paddingTop: spacing.lg },
-    servicio: { ...typography.title, color: colors.secondary },
-    lineaConIcono: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
-    linea: { ...typography.small, color: colors.textMuted, flexShrink: 1 },
-    descripcion: { ...typography.small, color: colors.textMuted, marginTop: spacing.xs },
-    bloque: { marginTop: spacing.lg },
-    etaBox: {
+    barraSuperior: {
+      position: 'absolute',
+      left: spacing.lg,
+      right: spacing.lg,
       flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginTop: spacing.lg,
-      padding: spacing.lg,
-      ...shadow.card,
+      justifyContent: 'space-between',
     },
-    etaItem: { flex: 1, alignItems: 'center' },
-    etaDivider: { width: 1, height: 40, backgroundColor: colors.border },
-    etaValor: { ...typography.heading, color: colors.text, marginTop: spacing.xs },
-    etaLabel: { ...typography.caption, color: colors.textMuted },
-    gomeroBox: {
+    encabezado: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
-      marginTop: spacing.lg,
-      padding: spacing.lg,
-      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.lg,
+    },
+    encabezadoTexto: { flex: 1 },
+    estadoFila: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    estadoTitulo: { ...typography.title, color: colors.text, flexShrink: 1 },
+    estadoDescripcion: { ...typography.small, color: colors.textMuted, marginTop: spacing.xs },
+    eta: {
+      minWidth: 64,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+    },
+    etaValor: { ...typography.title, ...tabular, color: colors.primary },
+    etaUnidad: { ...typography.captionStrong, color: colors.primary, marginTop: -spacing.xxs },
+    cuerpo: { paddingHorizontal: spacing.xl },
+    persona: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      marginTop: spacing.xl,
+      padding: spacing.md,
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      ...shadow.card,
+      backgroundColor: colors.surface,
     },
-    gomeroInfo: { flex: 1 },
-    gomeroNombre: { ...typography.subheading, color: colors.text },
-    gomeroRol: { ...typography.small, color: colors.textMuted, marginTop: spacing.xxs },
-    gomeroActualizado: { ...typography.captionStrong, color: colors.primary, marginTop: spacing.xs },
-    telBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: colors.success,
+    personaInfo: { flex: 1 },
+    personaNombre: { ...typography.subheading, color: colors.text },
+    personaRol: { ...typography.caption, ...tabular, color: colors.textMuted, marginTop: spacing.xxs },
+    buscando: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      marginTop: spacing.xl,
+      padding: spacing.lg,
+      borderRadius: radius.lg,
+      backgroundColor: colors.warningLight,
+    },
+    buscandoTexto: { ...typography.smallStrong, color: colors.text, flex: 1 },
+    seccion: { marginTop: spacing.xxl },
+    seccionTitulo: { ...typography.captionStrong, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
+    dato: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md },
+    datoIcono: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      backgroundColor: colors.primaryLight,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    mapWrapper: {
-      height: 280,
-      borderRadius: radius.lg,
-      overflow: 'hidden',
-      marginTop: spacing.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    map: { flex: 1 },
-    cancelBtn: { marginTop: spacing.lg },
+    datoTexto: { flex: 1 },
+    datoValor: { ...typography.bodyStrong, color: colors.text },
+    datoLabel: { ...typography.caption, color: colors.textMuted },
+    precio: { ...typography.subheading, ...tabular, color: colors.primary },
+    cancelBtn: { marginTop: spacing.xxl },
     calificarBox: {
-      marginTop: spacing.xl,
+      marginTop: spacing.xxl,
       padding: spacing.xl,
       backgroundColor: colors.surface,
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      ...shadow.card,
     },
     calificarTitulo: { ...typography.heading, color: colors.text, textAlign: 'center' },
-    calificarSub: { ...typography.small, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs },
-    estrellas: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: spacing.sm,
-      marginVertical: spacing.lg,
-    },
+    calificarSub: { ...typography.small, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
     graciasBox: {
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
       gap: spacing.sm,
-      marginTop: spacing.xl,
+      marginTop: spacing.xxl,
     },
     gracias: { ...typography.bodyStrong, color: colors.success },
-    chatBox: {
-      flex: 1,
-      marginHorizontal: spacing.xl,
-      marginTop: spacing.md,
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      overflow: 'hidden',
-      ...shadow.card,
-    },
-    chatHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      padding: spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    seccion: { ...typography.subheading, color: colors.secondary },
   });

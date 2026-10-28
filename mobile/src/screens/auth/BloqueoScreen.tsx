@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../components/Button';
@@ -64,6 +65,7 @@ export default function BloqueoScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + spacing.xxl }]}>
       <StatusBar style="light" />
+      <LinearGradient colors={[colors.heroStart, colors.heroEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={[styles.circulo, styles.circuloGrande]} />
       <View style={[styles.circulo, styles.circuloChico]} />
 
@@ -75,7 +77,7 @@ export default function BloqueoScreen() {
         <Text style={styles.subtitulo}>Tu sesión está guardada. Desbloqueá para continuar.</Text>
 
         <Pressable onPress={intentar} disabled={verificando} style={styles.huella} hitSlop={12}>
-          <Ionicons name="finger-print" size={56} color="#fff" />
+          <Ionicons name="finger-print" size={56} color={colors.onPrimary} />
         </Pressable>
       </View>
 
@@ -100,7 +102,7 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.primary,
+      backgroundColor: colors.heroEnd,
       paddingHorizontal: spacing.xxl,
       overflow: 'hidden',
     },
@@ -112,13 +114,13 @@ const createStyles = (colors: ThemeColors) =>
       width: 88,
       height: 88,
       borderRadius: 44,
-      backgroundColor: '#fff',
+      backgroundColor: colors.onPrimary,
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: spacing.xl,
     },
-    avatarTexto: { ...typography.display, color: colors.primary },
-    hola: { ...typography.title, color: '#fff', textAlign: 'center' },
+    avatarTexto: { ...typography.display, color: colors.heroEnd },
+    hola: { ...typography.title, color: colors.onPrimary, textAlign: 'center' },
     subtitulo: {
       ...typography.body,
       color: 'rgba(255,255,255,0.85)',
@@ -137,7 +139,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
     },
     pie: { alignItems: 'center' },
-    boton: { alignSelf: 'stretch', backgroundColor: '#fff', borderColor: '#fff' },
+    boton: { alignSelf: 'stretch', backgroundColor: colors.onPrimary, borderColor: colors.onPrimary },
     otraCuenta: { paddingVertical: spacing.lg, marginTop: spacing.xs },
-    otraCuentaTexto: { ...typography.bodyStrong, color: '#fff' },
+    otraCuentaTexto: { ...typography.bodyStrong, color: colors.onPrimary },
   });

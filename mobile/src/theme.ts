@@ -7,6 +7,8 @@ export interface ThemeColors {
   secondary: string;
   background: string;
   surface: string;
+  /** Superficie que flota sobre otra (paneles, tarjetas destacadas). En oscuro es mas clara que surface. */
+  surfaceElevated: string;
   border: string;
   text: string;
   textMuted: string;
@@ -18,6 +20,13 @@ export interface ThemeColors {
   warningLight: string;
   info: string;
   infoLight: string;
+  /** Texto e iconos sobre fondos de color primario o de estado. */
+  onPrimary: string;
+  /** Degradado de los encabezados de marca. */
+  heroStart: string;
+  heroEnd: string;
+  /** Fondo oscurecido detras de modales y paneles. */
+  overlay: string;
 }
 
 export const lightColors: ThemeColors = {
@@ -27,6 +36,7 @@ export const lightColors: ThemeColors = {
   secondary: '#1E293B',
   background: '#F8FAFC',
   surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
   border: '#E2E8F0',
   text: '#0F172A',
   textMuted: '#64748B',
@@ -38,6 +48,10 @@ export const lightColors: ThemeColors = {
   warningLight: '#FEF3C7',
   info: '#2563EB',
   infoLight: '#DBEAFE',
+  onPrimary: '#FFFFFF',
+  heroStart: '#F97316',
+  heroEnd: '#C2410C',
+  overlay: 'rgba(15,23,42,0.45)',
 };
 
 export const darkColors: ThemeColors = {
@@ -47,6 +61,7 @@ export const darkColors: ThemeColors = {
   secondary: '#F1F5F9',
   background: '#0F172A',
   surface: '#1E293B',
+  surfaceElevated: '#273449',
   border: '#334155',
   text: '#F1F5F9',
   textMuted: '#94A3B8',
@@ -58,6 +73,10 @@ export const darkColors: ThemeColors = {
   warningLight: 'rgba(251,191,36,0.16)',
   info: '#60A5FA',
   infoLight: 'rgba(96,165,250,0.16)',
+  onPrimary: '#FFFFFF',
+  heroStart: '#EA580C',
+  heroEnd: '#9A3412',
+  overlay: 'rgba(2,6,23,0.6)',
 };
 
 export const estadoLabel: Record<string, string> = {
@@ -103,13 +122,15 @@ export function estadoFondoFor(colors: ThemeColors, estado: string): string {
   return mapa[estado] ?? colors.border;
 }
 
+// Las tarjetas se separan del fondo con el borde; la sombra de `card` es apenas perceptible
+// (y en Android no hay elevation) para no mezclar borde y sombra. `raised` es para lo que flota.
 export const shadow = {
   card: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 0,
   },
   raised: {
     shadowColor: '#000',
@@ -161,6 +182,11 @@ export const typography = {
   bodyStrong: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 22 },
   small: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   smallStrong: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  caption: { fontFamily: fonts.medium, fontSize: 11.5, lineHeight: 16 },
-  captionStrong: { fontFamily: fonts.bold, fontSize: 11.5, lineHeight: 16 },
+  caption: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
+  captionStrong: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
+  /** Solo para etiquetas cortas (pasos del timeline, chips chicos). */
+  micro: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
 } satisfies Record<string, TextStyle>;
+
+/** Numeros de ancho fijo: precios, distancias y tiempos no "bailan" al cambiar. */
+export const tabular: TextStyle = { fontVariant: ['tabular-nums'] };

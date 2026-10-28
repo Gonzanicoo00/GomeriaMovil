@@ -1,35 +1,51 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import MapView from 'react-native-maps';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
-import { Chat } from '../../components/Chat';
 import { Avatar } from '../../components/Avatar';
+import { BottomSheet } from '../../components/BottomSheet';
+import { IconButton } from '../../components/IconButton';
+import { PulseDot } from '../../components/Animated';
 import { DetalleSkeleton } from '../../components/Skeleton';
 import { ErrorState } from '../../components/ErrorState';
-import { ClientePin, GomeroPin, mapStyleClaro, mapStyleOscuro } from '../../components/MapPins';
+import { EstadoTimeline } from '../../components/EstadoTimeline';
+import { ServicioCompletado } from '../../components/ServicioCompletado';
+import { ClientePin, GomeroPinAnimado, mapStyleClaro, mapStyleOscuro } from '../../components/MapPins';
 import * as SolicitudesApi from '../../api/solicitudes';
 import * as TrackingApi from '../../api/tracking';
 import { getErrorMessage } from '../../api/client';
 import { usePolling } from '../../hooks/usePolling';
 import { useLocationWatcher, Coords } from '../../hooks/useLocationWatcher';
+import { useMensajesNoLeidos } from '../../hooks/useMensajesNoLeidos';
 import { useAuth } from '../../context/AuthContext';
 import { useFeedback } from '../../context/FeedbackContext';
 import { useTheme } from '../../context/ThemeContext';
-import { ThemeColors, estadoColorFor, estadoFondoFor, estadoIcon, estadoLabel, radius, shadow, spacing, typography } from '../../theme';
+import { ThemeColors, estadoLabel, radius, shadow, spacing, tabular, typography } from '../../theme';
 import { EstadoSolicitud, Solicitud } from '../../types';
-import { distanciaKm, estimarEtaMinutos } from '../../utils/format';
+import { haptics } from '../../utils/haptics';
+import { distanciaKm, estimarEtaMinutos, formatDuracion, formatPrecio, formatRelativeTime } from '../../utils/format';
 import { GomeroStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<GomeroStackParamList, 'SolicitudActiva'>;
 
 const SIGUIENTE_ESTADO: Partial<Record<EstadoSolicitud, { estado: EstadoSolicitud; label: string; icon: keyof typeof Ionicons.glyphMap }>> = {
-  asignada: { estado: 'en_camino', label: 'Marcar que estoy en camino', icon: 'navigate-outline' },
-  en_camino: { estado: 'en_proceso', label: 'Marcar que empecé el trabajo', icon: 'construct-outline' },
-  en_proceso: { estado: 'completada', label: 'Marcar como completado', icon: 'checkmark-done-outline' },
+  asignada: { estado: 'en_camino', label: 'Estoy en camino', icon: 'navigate-outline' },
+  en_camino: { estado: 'en_proceso', label: 'Llegué, empiezo el trabajo', icon: 'construct-outline' },
+  en_proceso: { estado: 'completada', label: 'Terminé el servicio', icon: 'checkmark-done-outline' },
+};
+
+const DESCRIPCION_GOMERO: Record<EstadoSolicitud, string> = {
+  pendiente: 'Esperando confirmación.',
+  asignada: 'Avisale al cliente cuando salgas para allá.',
+  en_camino: 'El cliente ve tu ubicación en tiempo real.',
+  en_proceso: 'Cuando termines, cargá el precio final.',
+  completada: 'Servicio terminado. ¡Buen trabajo!',
+  cancelada: 'Esta solicitud fue cancelada.',
 };
 
 export default function SolicitudActivaScreen({ route, navigation }: Props) {
@@ -39,13 +55,21 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
   const { colors, isDark } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const enfocada = useIsFocused();
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
   const [precioFinal, setPrecioFinal] = useState('');
   const [precioError, setPrecioError] = useState<string | null>(null);
+  const [pidiendoPrecio, setPidiendoPrecio] = useState(false);
   const [actualizando, setActualizando] = useState(false);
+  const [exitoVisible, setExitoVisible] = useState(false);
   const [miPosicion, setMiPosicion] = useState<Coords | null>(null);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const mapRef = useRef<MapView | null>(null);
+  const seguir = useRef(true);
+
+  const alturaColapsada = Math.min(340, height * 0.44) + insets.bottom;
+  const alturaExpandida = height * 0.86;
 
   const cargar = useCallback(async () => {
     try {
@@ -67,23 +91,44 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
     TrackingApi.enviarTracking(solicitudId, coords.latitude, coords.longitude).catch(() => {});
   }, [solicitudId]));
 
+  const activa = !!solicitud && !['completada', 'cancelada'].includes(solicitud.estado);
+  const noLeidos = useMensajesNoLeidos(solicitudId, usuario?.id, activa && enfocada);
+
+  const encuadrar = useCallback(
+    (animado = true) => {
+      if (!solicitud) return;
+      const cliente = { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) };
+      if (miPosicion) {
+        mapRef.current?.fitToCoordinates([cliente, miPosicion], {
+          edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
+          animated: animado,
+        });
+      } else {
+        mapRef.current?.animateToRegion({ ...cliente, latitudeDelta: 0.01, longitudeDelta: 0.01 }, animado ? 400 : 0);
+      }
+    },
+    [solicitud?.latitud, solicitud?.longitud, miPosicion]
+  );
+
   // Reencuadra el mapa para que ambos puntos (cliente y gomero) queden siempre visibles.
   useEffect(() => {
-    if (!solicitud || !miPosicion) return;
-    mapRef.current?.fitToCoordinates(
-      [{ latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) }, miPosicion],
-      { edgePadding: { top: 60, right: 60, bottom: 60, left: 60 }, animated: true }
-    );
-  }, [solicitud?.latitud, solicitud?.longitud, miPosicion]);
+    if (seguir.current) encuadrar();
+  }, [encuadrar]);
 
   const avanzarEstado = async () => {
     if (!solicitud) return;
     const siguiente = SIGUIENTE_ESTADO[solicitud.estado];
     if (!siguiente) return;
 
-    if (siguiente.estado === 'completada' && (!precioFinal || Number(precioFinal) <= 0)) {
-      setPrecioError('Ingresá el precio final del servicio');
-      return;
+    if (siguiente.estado === 'completada') {
+      if (!pidiendoPrecio) {
+        setPidiendoPrecio(true);
+        return;
+      }
+      if (!precioFinal || Number(precioFinal) <= 0) {
+        setPrecioError('Ingresá el precio final del servicio');
+        return;
+      }
     }
 
     setActualizando(true);
@@ -92,11 +137,13 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
         precio_final: siguiente.estado === 'completada' ? parseFloat(precioFinal) : undefined,
       });
       setSolicitud(actualizada);
-      toast(
-        siguiente.estado === 'completada'
-          ? { tipo: 'exito', titulo: '¡Servicio completado!', mensaje: 'Buen trabajo. El cliente ya puede calificarte.' }
-          : { tipo: 'exito', titulo: estadoLabel[siguiente.estado], mensaje: 'Le avisamos al cliente.' }
-      );
+      setPidiendoPrecio(false);
+      if (siguiente.estado === 'completada') {
+        haptics.exito();
+        setExitoVisible(true);
+      } else {
+        toast({ tipo: 'exito', titulo: estadoLabel[siguiente.estado], mensaje: 'Le avisamos al cliente.' });
+      }
     } catch (err) {
       toast({ tipo: 'error', titulo: 'No se pudo actualizar', mensaje: getErrorMessage(err) });
     } finally {
@@ -135,7 +182,6 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
   const lat = parseFloat(solicitud.latitud);
   const lng = parseFloat(solicitud.longitud);
   const siguiente = SIGUIENTE_ESTADO[solicitud.estado];
-  const activa = !['completada', 'cancelada'].includes(solicitud.estado);
 
   let distancia: number | null = null;
   let etaMin: number | null = null;
@@ -144,184 +190,267 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
     etaMin = estimarEtaMinutos(distancia);
   }
 
+  const comoLlegar = () => {
+    const url = Platform.select({
+      ios: `maps://?daddr=${lat},${lng}`,
+      default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+    });
+    Linking.openURL(url).catch(() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`));
+  };
+
+  const abrirChat = () =>
+    navigation.navigate('Chat', {
+      solicitudId,
+      nombre: solicitud.cliente_nombre,
+      apellido: solicitud.cliente_apellido,
+      rol: 'Cliente',
+      telefono: solicitud.cliente_telefono,
+      activo: activa,
+    });
+
+  const duracion = formatDuracion(solicitud.fecha_inicio ?? solicitud.fecha_asignacion, solicitud.fecha_completado);
+  const resumen = [
+    { label: 'Servicio', valor: solicitud.servicio_nombre ?? '' },
+    { label: 'Cliente', valor: `${solicitud.cliente_nombre ?? ''} ${solicitud.cliente_apellido ?? ''}`.trim() },
+    ...(duracion ? [{ label: 'Duración', valor: duracion }] : []),
+    ...(solicitud.precio_final ? [{ label: 'Cobraste', valor: formatPrecio(solicitud.precio_final), destacado: true }] : []),
+  ];
+
+  const encabezado = (
+    <View style={styles.encabezado}>
+      <View style={styles.encabezadoFila}>
+        <View style={styles.encabezadoTexto}>
+          <View style={styles.estadoFila}>
+            {enviandoTracking && <PulseDot color={colors.success} />}
+            <Text style={styles.estadoTitulo} numberOfLines={1}>{estadoLabel[solicitud.estado]}</Text>
+          </View>
+          <Text style={styles.estadoDescripcion} numberOfLines={2}>{DESCRIPCION_GOMERO[solicitud.estado]}</Text>
+        </View>
+        {etaMin !== null && enviandoTracking && (
+          <View style={styles.eta} accessibilityLabel={`Llegás en unos ${etaMin} minutos`}>
+            <Text style={styles.etaValor}>{etaMin}</Text>
+            <Text style={styles.etaUnidad}>min</Text>
+          </View>
+        )}
+      </View>
+      {siguiente && (
+        <Button title={siguiente.label} icon={siguiente.icon} onPress={avanzarEstado} loading={actualizando && !pidiendoPrecio} style={styles.accion} />
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.header} contentContainerStyle={styles.content}>
-        <View style={[styles.badge, { backgroundColor: estadoFondoFor(colors, solicitud.estado) }]}>
-          <Ionicons name={estadoIcon[solicitud.estado] as any} size={14} color={estadoColorFor(colors, solicitud.estado)} />
-          <Text style={[styles.badgeText, { color: estadoColorFor(colors, solicitud.estado) }]}>
-            {estadoLabel[solicitud.estado]}
-          </Text>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        customMapStyle={isDark ? mapStyleOscuro : mapStyleClaro}
+        showsPointsOfInterests={false}
+        toolbarEnabled={false}
+        mapPadding={{ top: insets.top + spacing.huge, right: 0, bottom: alturaColapsada - radius.xxl, left: 0 }}
+        initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
+        onPanDrag={() => {
+          seguir.current = false;
+        }}
+      >
+        <ClientePin coordinate={{ latitude: lat, longitude: lng }} title={solicitud.cliente_nombre ?? 'Cliente'} />
+        {miPosicion && <GomeroPinAnimado coordinate={miPosicion} title="Vos" />}
+      </MapView>
+
+      <View style={[styles.barraSuperior, { top: insets.top + spacing.sm }]} pointerEvents="box-none">
+        <IconButton icon="chevron-back" onPress={() => navigation.goBack()} accessibilityLabel="Volver" />
+        <View style={styles.barraDerecha}>
+          {activa && <IconButton icon="navigate" onPress={comoLlegar} accessibilityLabel="Cómo llegar con el GPS" />}
+          <IconButton
+            icon="locate"
+            onPress={() => {
+              seguir.current = true;
+              encuadrar();
+            }}
+            accessibilityLabel="Centrar el mapa"
+          />
         </View>
+      </View>
 
-        <Text style={styles.servicio}>{solicitud.servicio_nombre}</Text>
-        {solicitud.direccion && (
-          <View style={styles.lineaConIcono}>
-            <Ionicons name="location-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.linea}>{solicitud.direccion}</Text>
-          </View>
-        )}
-        {solicitud.descripcion && <Text style={styles.linea}>{solicitud.descripcion}</Text>}
-
-        {(distancia !== null || etaMin !== null) && (
-          <View style={styles.etaBox}>
-            <View style={styles.etaItem}>
-              <Ionicons name="navigate-outline" size={18} color={colors.primary} />
-              <Text style={styles.etaValor}>{distancia?.toFixed(1)} km</Text>
-              <Text style={styles.etaLabel}>de distancia</Text>
+      <BottomSheet alturaColapsada={alturaColapsada} alturaExpandida={alturaExpandida} encabezado={encabezado}>
+        <View style={styles.cuerpo}>
+          <View style={styles.persona}>
+            <Avatar nombre={solicitud.cliente_nombre} apellido={solicitud.cliente_apellido} size={48} />
+            <View style={styles.personaInfo}>
+              <Text style={styles.personaNombre} numberOfLines={1}>
+                {solicitud.cliente_nombre} {solicitud.cliente_apellido}
+              </Text>
+              <Text style={styles.personaRol}>
+                Cliente{distancia !== null ? ` · a ${distancia.toFixed(1)} km` : ''}
+              </Text>
             </View>
-            <View style={styles.etaDivider} />
-            <View style={styles.etaItem}>
-              <Ionicons name="time-outline" size={18} color={colors.primary} />
-              <Text style={styles.etaValor}>~{etaMin} min</Text>
-              <Text style={styles.etaLabel}>tiempo estimado</Text>
-            </View>
+            <IconButton icon="chatbubble-ellipses" variante="suave" onPress={abrirChat} badge={noLeidos} accessibilityLabel="Abrir chat con el cliente" />
+            {solicitud.cliente_telefono && activa ? (
+              <IconButton
+                icon="call"
+                variante="solido"
+                color={colors.success}
+                onPress={() => Linking.openURL(`tel:${solicitud.cliente_telefono}`)}
+                accessibilityLabel="Llamar al cliente"
+              />
+            ) : null}
           </View>
-        )}
 
-        <View style={styles.clienteBox}>
-          <Avatar nombre={solicitud.cliente_nombre} apellido={solicitud.cliente_apellido} />
-          <View style={styles.clienteInfo}>
-            <Text style={styles.clienteNombre}>{solicitud.cliente_nombre} {solicitud.cliente_apellido}</Text>
-            <Text style={styles.linea}>Cliente</Text>
+          <View style={styles.timeline}>
+            <EstadoTimeline estado={solicitud.estado} soloPasos />
           </View>
-          {solicitud.cliente_telefono && (
-            <Pressable
-              style={styles.telBtn}
-              onPress={() => Linking.openURL(`tel:${solicitud.cliente_telefono}`)}
-              android_ripple={{ color: colors.primary, borderless: true, radius: 19 }}
-            >
-              <Ionicons name="call-outline" size={18} color={colors.primary} />
-            </Pressable>
+
+          <View style={styles.seccion}>
+            <Text style={styles.seccionTitulo}>Detalle del pedido</Text>
+            <View style={styles.dato}>
+              <View style={styles.datoIcono}>
+                <Ionicons name="construct-outline" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.datoTexto}>
+                <Text style={styles.datoValor}>{solicitud.servicio_nombre}</Text>
+                <Text style={styles.datoLabel}>Pedido {formatRelativeTime(solicitud.fecha_solicitud)}</Text>
+              </View>
+              {solicitud.precio_final || solicitud.precio_estimado ? (
+                <Text style={styles.precio}>{formatPrecio(solicitud.precio_final ?? solicitud.precio_estimado)}</Text>
+              ) : null}
+            </View>
+            {solicitud.direccion ? (
+              <View style={styles.dato}>
+                <View style={styles.datoIcono}>
+                  <Ionicons name="location-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.datoTexto}>
+                  <Text style={styles.datoValor}>{solicitud.direccion}</Text>
+                  <Text style={styles.datoLabel}>Dirección de referencia</Text>
+                </View>
+              </View>
+            ) : null}
+            {solicitud.descripcion ? (
+              <View style={styles.dato}>
+                <View style={styles.datoIcono}>
+                  <Ionicons name="chatbox-ellipses-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.datoTexto}>
+                  <Text style={styles.datoValor}>{solicitud.descripcion}</Text>
+                  <Text style={styles.datoLabel}>Lo que contó el cliente</Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          {activa && (
+            <Button title="Cancelar servicio" variant="outlineDanger" icon="close-circle-outline" onPress={cancelar} style={styles.cancelBtn} />
           )}
         </View>
+      </BottomSheet>
 
-        <View style={styles.mapWrapper}>
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            customMapStyle={isDark ? mapStyleOscuro : mapStyleClaro}
-            showsPointsOfInterests={false}
-            toolbarEnabled={false}
-            initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-          >
-            <ClientePin coordinate={{ latitude: lat, longitude: lng }} title={solicitud.cliente_nombre ?? 'Cliente'} />
-            {miPosicion && <GomeroPin coordinate={miPosicion} title="Vos" />}
-          </MapView>
-        </View>
-
-        {solicitud.estado === 'en_proceso' && (
-          <View style={styles.precioBox}>
+      <Modal visible={pidiendoPrecio} transparent animationType="fade" onRequestClose={() => setPidiendoPrecio(false)} statusBarTranslucent>
+        <KeyboardAvoidingView style={styles.modalFondo} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPidiendoPrecio(false)} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>¿Cuánto cobraste?</Text>
+            <Text style={styles.modalSub}>Cargá el precio final para cerrar el servicio.</Text>
             <Input
               label="Precio final ($)"
               icon="cash-outline"
               value={precioFinal}
-              onChangeText={(v) => { setPrecioFinal(v); setPrecioError(null); }}
+              onChangeText={(v) => {
+                setPrecioFinal(v.replace(/[^0-9.,]/g, '').replace(',', '.'));
+                setPrecioError(null);
+              }}
               keyboardType="numeric"
-              placeholder="Ej: 3200"
+              placeholder={solicitud.precio_estimado ? `Ej: ${Math.round(parseFloat(solicitud.precio_estimado))}` : 'Ej: 3200'}
               error={precioError ?? undefined}
+              autoFocus
             />
+            <Button title="Confirmar y terminar" icon="checkmark-done-outline" onPress={avanzarEstado} loading={actualizando} />
+            <Button title="Volver" variant="outline" onPress={() => setPidiendoPrecio(false)} style={styles.modalVolver} />
           </View>
-        )}
+        </KeyboardAvoidingView>
+      </Modal>
 
-        {siguiente && (
-          <Button title={siguiente.label} icon={siguiente.icon} onPress={avanzarEstado} loading={actualizando} style={styles.button} />
-        )}
-
-        {activa && (
-          <Button title="Cancelar solicitud" variant="danger" icon="close-circle-outline" onPress={cancelar} style={styles.button} />
-        )}
-      </ScrollView>
-
-      <View style={[styles.chatBox, { marginBottom: insets.bottom + spacing.md }]}>
-        <View style={styles.chatHeader}>
-          <Ionicons name="chatbubbles-outline" size={16} color={colors.primary} />
-          <Text style={styles.seccion}>Chat con el cliente</Text>
-        </View>
-        <Chat solicitudId={solicitudId} usuarioId={usuario!.id} activo={activa} />
-      </View>
+      <ServicioCompletado
+        visible={exitoVisible}
+        titulo="¡Buen trabajo!"
+        subtitulo="El servicio quedó registrado y el cliente ya puede calificarte."
+        resumen={resumen}
+        textoCerrar="Volver al inicio"
+        onCerrar={() => {
+          setExitoVisible(false);
+          navigation.goBack();
+        }}
+      />
     </View>
   );
 }
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { flexShrink: 1 },
-  content: { padding: spacing.xl, paddingTop: spacing.lg },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm - spacing.xxs,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm - spacing.xxs,
-    borderRadius: radius.pill,
-    marginBottom: spacing.md,
-  },
-  badgeText: { ...typography.captionStrong, fontSize: 12 },
-  servicio: { ...typography.title, color: colors.secondary },
-  lineaConIcono: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
-  linea: { ...typography.small, color: colors.textMuted, marginTop: spacing.xs, flexShrink: 1 },
-  etaBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    ...shadow.card,
-  },
-  etaItem: { flex: 1, alignItems: 'center' },
-  etaDivider: { width: 1, height: 40, backgroundColor: colors.border },
-  etaValor: { ...typography.heading, color: colors.text, marginTop: spacing.xs },
-  etaLabel: { ...typography.caption, color: colors.textMuted },
-  clienteBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadow.card,
-  },
-  clienteInfo: { flex: 1 },
-  clienteNombre: { ...typography.subheading, color: colors.text },
-  telBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapWrapper: { height: 280, borderRadius: radius.lg, overflow: 'hidden', marginTop: spacing.lg, borderWidth: 1, borderColor: colors.border },
-  map: { flex: 1 },
-  precioBox: { marginTop: spacing.lg },
-  button: { marginTop: spacing.md },
-  chatBox: {
-    flex: 1,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    ...shadow.card,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  seccion: { ...typography.subheading, color: colors.secondary },
-});
+    container: { flex: 1, backgroundColor: colors.background },
+    barraSuperior: {
+      position: 'absolute',
+      left: spacing.lg,
+      right: spacing.lg,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    barraDerecha: { flexDirection: 'row', gap: spacing.sm },
+    encabezado: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg },
+    encabezadoFila: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    encabezadoTexto: { flex: 1 },
+    estadoFila: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    estadoTitulo: { ...typography.title, color: colors.text, flexShrink: 1 },
+    estadoDescripcion: { ...typography.small, color: colors.textMuted, marginTop: spacing.xs },
+    eta: {
+      minWidth: 64,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+    },
+    etaValor: { ...typography.title, ...tabular, color: colors.primary },
+    etaUnidad: { ...typography.captionStrong, color: colors.primary, marginTop: -spacing.xxs },
+    accion: { marginTop: spacing.lg },
+    cuerpo: { paddingHorizontal: spacing.xl },
+    persona: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    personaInfo: { flex: 1 },
+    personaNombre: { ...typography.subheading, color: colors.text },
+    personaRol: { ...typography.caption, ...tabular, color: colors.textMuted, marginTop: spacing.xxs },
+    timeline: { marginTop: spacing.xl },
+    seccion: { marginTop: spacing.xxl },
+    seccionTitulo: { ...typography.captionStrong, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
+    dato: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.md },
+    datoIcono: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    datoTexto: { flex: 1 },
+    datoValor: { ...typography.bodyStrong, color: colors.text },
+    datoLabel: { ...typography.caption, color: colors.textMuted },
+    precio: { ...typography.subheading, ...tabular, color: colors.primary },
+    cancelBtn: { marginTop: spacing.xxl },
+    modalFondo: { flex: 1, justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.overlay },
+    modalCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: radius.xl,
+      padding: spacing.xl,
+      ...shadow.raised,
+    },
+    modalTitulo: { ...typography.heading, color: colors.text },
+    modalSub: { ...typography.small, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.lg },
+    modalVolver: { marginTop: spacing.sm },
+  });

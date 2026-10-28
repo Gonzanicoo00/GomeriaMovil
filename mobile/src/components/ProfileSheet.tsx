@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -67,7 +67,11 @@ function Opcion({
   const color = danger ? colors.danger : colors.text;
 
   return (
-    <Pressable style={styles.opcion} onPress={onPress} android_ripple={{ color: colors.border }}>
+    <Pressable
+      style={({ pressed }) => [styles.opcion, pressed && styles.opcionApretada]}
+      onPress={onPress}
+      android_ripple={{ color: colors.border }}
+    >
       <View style={[styles.opcionIcono, { backgroundColor: danger ? colors.dangerLight : colors.primaryLight }]}>
         <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.primary} />
       </View>
@@ -79,13 +83,13 @@ function Opcion({
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15,23,42,0.45)' },
+    backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlay },
     sheet: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceElevated,
       borderTopLeftRadius: radius.xxl,
       borderTopRightRadius: radius.xxl,
       paddingHorizontal: spacing.xl,
@@ -124,5 +128,6 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    opcionApretada: { opacity: Platform.OS === 'ios' ? 0.6 : 1 },
     opcionTexto: { ...typography.bodyStrong, flex: 1 },
   });

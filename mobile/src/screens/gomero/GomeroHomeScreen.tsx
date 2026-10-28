@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Switch, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -10,7 +10,8 @@ import { Avatar } from '../../components/Avatar';
 import { ProfileSheet } from '../../components/ProfileSheet';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
-import { FadeIn, PulseDot } from '../../components/Animated';
+import { FadeIn, PressableScale, PulseDot } from '../../components/Animated';
+import { IconButton } from '../../components/IconButton';
 import { ListaSkeleton } from '../../components/Skeleton';
 import * as SolicitudesApi from '../../api/solicitudes';
 import * as GomerosApi from '../../api/gomeros';
@@ -22,7 +23,7 @@ import { useFeedback } from '../../context/FeedbackContext';
 import { haptics } from '../../utils/haptics';
 import { formatPrecio } from '../../utils/format';
 import { useTheme } from '../../context/ThemeContext';
-import { ThemeColors, radius, shadow, spacing, typography } from '../../theme';
+import { ThemeColors, radius, shadow, spacing, tabular, typography } from '../../theme';
 import { Solicitud } from '../../types';
 import { GomeroStackParamList } from '../../navigation/types';
 
@@ -132,7 +133,7 @@ export default function GomeroHomeScreen({ navigation }: Props) {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
       <View style={styles.header}>
-        <Pressable style={styles.headerLeft} onPress={() => setPerfilAbierto(true)} hitSlop={8}>
+        <PressableScale style={styles.headerLeft} onPress={() => setPerfilAbierto(true)} hitSlop={8} accessibilityLabel="Abrir perfil">
           <Avatar nombre={usuario?.nombre} apellido={usuario?.apellido} />
           <View>
             <Text style={styles.saludo}>Hola, {usuario?.nombre}</Text>
@@ -143,16 +144,8 @@ export default function GomeroHomeScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
-        </Pressable>
-        <Pressable
-          style={styles.iconBtn}
-          onPress={() => navigation.navigate('Historial')}
-          hitSlop={8}
-          android_ripple={{ color: colors.primaryLight, borderless: true, radius: 22 }}
-          accessibilityLabel="Ver historial"
-        >
-          <Ionicons name="time-outline" size={20} color={colors.primary} />
-        </Pressable>
+        </PressableScale>
+        <IconButton icon="time-outline" variante="suave" onPress={() => navigation.navigate('Historial')} accessibilityLabel="Ver historial" />
       </View>
 
       <View style={styles.disponibleBox}>
@@ -173,7 +166,7 @@ export default function GomeroHomeScreen({ navigation }: Props) {
           value={disponible}
           onValueChange={toggleDisponible}
           trackColor={{ true: colors.primary, false: colors.border }}
-          thumbColor="#fff"
+          thumbColor={colors.onPrimary}
         />
       </View>
 
@@ -183,6 +176,9 @@ export default function GomeroHomeScreen({ navigation }: Props) {
           icon="power-outline"
           title="Estás desconectado"
           subtitle="Activate como disponible para ver solicitudes cercanas"
+          actionLabel="Conectarme"
+          actionIcon="power-outline"
+          onAction={() => toggleDisponible(true)}
         />
       ) : primeraCarga ? (
         <ListaSkeleton cantidad={3} />
@@ -235,15 +231,7 @@ const createStyles = (colors: ThemeColors) =>
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 1 },
   saludo: { ...typography.heading, color: colors.secondary },
   calificacionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
-  subtitulo: { ...typography.smallStrong, color: colors.textMuted },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryLight,
-  },
+  subtitulo: { ...typography.smallStrong, ...tabular, color: colors.textMuted },
   disponibleBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',

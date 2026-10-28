@@ -7,6 +7,7 @@ import { SolicitudCard } from '../../components/SolicitudCard';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { FadeIn } from '../../components/Animated';
+import { IconButton } from '../../components/IconButton';
 import { ListaSkeleton } from '../../components/Skeleton';
 import * as SolicitudesApi from '../../api/solicitudes';
 import { getErrorMessage } from '../../api/client';
@@ -47,7 +48,10 @@ export default function HistorialScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
-      <Text style={styles.titulo}>Historial de servicios</Text>
+      <View style={styles.header}>
+        <IconButton icon="chevron-back" variante="suave" color={colors.text} onPress={() => navigation.goBack()} accessibilityLabel="Volver" />
+        <Text style={styles.titulo}>Historial</Text>
+      </View>
       {primeraCarga ? (
         <ListaSkeleton />
       ) : error && solicitudes.length === 0 ? (
@@ -59,7 +63,14 @@ export default function HistorialScreen({ navigation }: Props) {
           refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargar} tintColor={colors.primary} />}
           contentContainerStyle={styles.lista}
           ListEmptyComponent={
-            <EmptyState icon="document-text-outline" title="Todavía no pediste ningún servicio" />
+            <EmptyState
+              icon="document-text-outline"
+              title="Todavía no pediste ningún servicio"
+              subtitle="Cuando pidas un gomero, vas a ver acá el detalle de cada servicio."
+              actionLabel="Pedir un servicio"
+              actionIcon="add-circle-outline"
+              onAction={() => navigation.navigate('ClienteHome')}
+            />
           }
           renderItem={({ item, index }) => (
             <FadeIn index={index}>
@@ -75,6 +86,7 @@ export default function HistorialScreen({ navigation }: Props) {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.xl },
-    titulo: { ...typography.title, color: colors.secondary, marginBottom: spacing.lg },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+    titulo: { ...typography.title, color: colors.secondary },
     lista: { paddingBottom: spacing.huge, flexGrow: 1 },
   });

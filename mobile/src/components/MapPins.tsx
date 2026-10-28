@@ -1,7 +1,7 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Marker, MapStyleElement } from 'react-native-maps';
+import { AnimatedRegion, MapMarker, Marker, MarkerAnimated, MapStyleElement } from 'react-native-maps';
 import { useTheme } from '../context/ThemeContext';
 import { shadow } from '../theme';
 
@@ -16,8 +16,8 @@ export function ClientePin({ coordinate, title }: PinProps) {
   return (
     <Marker coordinate={coordinate} title={title} anchor={{ x: 0.5, y: 0.5 }}>
       <View style={[styles.halo, { backgroundColor: colors.primaryLight }]}>
-        <View style={[styles.pin, { backgroundColor: colors.primary }]}>
-          <Ionicons name="person" size={16} color="#fff" />
+        <View style={[styles.pin, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
+          <Ionicons name="person" size={16} color={colors.onPrimary} />
         </View>
       </View>
     </Marker>
@@ -36,6 +36,42 @@ export function GomeroPin({ coordinate, title }: PinProps) {
   );
 }
 
+// Un poco menos que el intervalo del polling de tracking (3 s): el pin llega justo antes de la siguiente posicion.
+const DURACION_MOVIMIENTO = 2800;
+
+/**
+ * Igual que GomeroPin, pero cuando cambia la coordenada el pin se desliza hasta la nueva posicion
+ * en lugar de saltar. En Android se usa la animacion nativa del marcador; en iOS, AnimatedRegion.
+ */
+export function GomeroPinAnimado({ coordinate, title }: PinProps) {
+  const { colors } = useTheme();
+  const markerRef = useRef<MapMarker>(null);
+  const region = useRef(new AnimatedRegion({ ...coordinate, latitudeDelta: 0, longitudeDelta: 0 })).current;
+  const primera = useRef(true);
+
+  useEffect(() => {
+    if (primera.current) {
+      primera.current = false;
+      return;
+    }
+    if (Platform.OS === 'android') {
+      markerRef.current?.animateMarkerToCoordinate(coordinate, DURACION_MOVIMIENTO);
+    } else {
+      region
+        .timing({ ...coordinate, latitudeDelta: 0, longitudeDelta: 0, duration: DURACION_MOVIMIENTO, useNativeDriver: false, toValue: 0 } as any)
+        .start();
+    }
+  }, [coordinate.latitude, coordinate.longitude]);
+
+  return (
+    <MarkerAnimated ref={markerRef as any} coordinate={region as any} title={title} anchor={{ x: 0.5, y: 0.5 }}>
+      <View style={[styles.pin, styles.pinGomero, { backgroundColor: colors.secondary, borderColor: colors.surface }]}>
+        <MaterialCommunityIcons name="car-wrench" size={20} color={colors.background} />
+      </View>
+    </MarkerAnimated>
+  );
+}
+
 const styles = StyleSheet.create({
   halo: {
     width: 52,
@@ -49,7 +85,6 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 3,
-    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow.card,
