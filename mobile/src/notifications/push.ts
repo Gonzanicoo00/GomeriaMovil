@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import Constants from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
 import { Platform } from 'react-native';
 
 type NotificationsModule = typeof import('expo-notifications');
@@ -9,7 +10,7 @@ type NotificationsModule = typeof import('expo-notifications');
  * apenas se carga expo-notifications. Por eso en Expo Go no se carga el modulo:
  * la app funciona igual via polling. En un development build (expo run:android) si.
  */
-export const pushDisponible = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+export const pushDisponible = !isRunningInExpoGo();
 
 let notifications: NotificationsModule | null = null;
 
