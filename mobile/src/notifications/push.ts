@@ -10,24 +10,34 @@ type NotificationsModule = typeof import('expo-notifications');
  * apenas se carga expo-notifications. Por eso en Expo Go no se carga el modulo:
  * la app funciona igual via polling. En un development build (expo run:android) si.
  */
-export const pushDisponible = !isRunningInExpoGo();
+export const pushDisponible = !isRunningInExpoGo() && Constants.appOwnership !== 'expo';
 
 let notifications: NotificationsModule | null = null;
+let fallo = false;
 
-/** Devuelve expo-notifications cargado bajo demanda, o null si estamos en Expo Go. */
+/** Devuelve expo-notifications cargado bajo demanda, o null si estamos en Expo Go o no se pudo cargar. */
 export function getNotifications(): NotificationsModule | null {
-  if (!pushDisponible) return null;
+  if (!pushDisponible || fallo) return null;
   if (!notifications) {
-    notifications = require('expo-notifications') as NotificationsModule;
-    notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
+    // Si al build le falta algun modulo nativo de expo-notifications, el require falla:
+    // en ese caso se sigue sin push en lugar de romper la app.
+    try {
+      const modulo = require('expo-notifications') as NotificationsModule;
+      modulo.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+      notifications = modulo;
+    } catch (err) {
+      fallo = true;
+      console.warn('expo-notifications no esta disponible en este build, se sigue sin push:', err);
+      return null;
+    }
   }
   return notifications;
 }
