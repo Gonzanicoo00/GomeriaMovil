@@ -1,5 +1,7 @@
 export type Rol = 'cliente' | 'gomero' | 'admin';
 
+export type TipoVehiculo = 'moto' | 'auto' | 'camioneta';
+
 export interface Usuario {
   id: number;
   nombre: string;
@@ -25,6 +27,10 @@ export interface GomeroPerfil {
   calificacion_promedio: string;
   total_servicios: number;
   documento_verificado: number;
+  vehiculo_tipo: TipoVehiculo | null;
+  vehiculo_marca_modelo: string | null;
+  vehiculo_color: string | null;
+  vehiculo_patente: string | null;
 }
 
 export interface Servicio {
@@ -70,6 +76,12 @@ export interface Solicitud {
   gomero_nombre?: string;
   gomero_apellido?: string;
   gomero_telefono?: string | null;
+  vehiculo_tipo?: TipoVehiculo | null;
+  vehiculo_marca_modelo?: string | null;
+  vehiculo_color?: string | null;
+  vehiculo_patente?: string | null;
+  /** 1 si el gomero asignado cargó foto del vehículo (se pide aparte con fotoVehiculo). */
+  vehiculo_tiene_foto?: number;
   distancia_km?: number;
 }
 

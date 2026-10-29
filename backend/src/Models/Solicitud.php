@@ -32,11 +32,15 @@ class Solicitud
         $stmt = Database::connection()->prepare(
             'SELECT s.*, sv.nombre AS servicio_nombre, sv.icono AS servicio_icono,
                     c.nombre AS cliente_nombre, c.apellido AS cliente_apellido, c.telefono AS cliente_telefono,
-                    g.nombre AS gomero_nombre, g.apellido AS gomero_apellido, g.telefono AS gomero_telefono
+                    g.nombre AS gomero_nombre, g.apellido AS gomero_apellido, g.telefono AS gomero_telefono,
+                    gp.vehiculo_tipo, gp.vehiculo_marca_modelo, gp.vehiculo_color, gp.vehiculo_patente,
+                    (vf.usuario_id IS NOT NULL) AS vehiculo_tiene_foto
              FROM solicitudes s
              JOIN servicios sv ON sv.id = s.servicio_id
              JOIN usuarios c ON c.id = s.cliente_id
              LEFT JOIN usuarios g ON g.id = s.gomero_id
+             LEFT JOIN gomeros gp ON gp.usuario_id = s.gomero_id
+             LEFT JOIN vehiculo_fotos vf ON vf.usuario_id = s.gomero_id
              WHERE s.id = :id LIMIT 1'
         );
         $stmt->execute(['id' => $id]);

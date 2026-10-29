@@ -68,6 +68,14 @@
           "color": "#EA580C"
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Usamos tus fotos para que cargues la foto de tu vehículo.",
+          "cameraPermission": "Usamos la cámara para que saques una foto de tu vehículo.",
+          "microphonePermission": false
+        }
+      ],
       "expo-font",
       "expo-status-bar"
     ]

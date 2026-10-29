@@ -5,6 +5,7 @@ namespace Gomeria\Controllers;
 use Gomeria\Helpers\JwtHelper;
 use Gomeria\Helpers\Response;
 use Gomeria\Helpers\Validator;
+use Gomeria\Helpers\VehiculoValidator;
 use Gomeria\Middleware\AuthMiddleware;
 use Gomeria\Models\Gomero;
 use Gomeria\Models\Usuario;
@@ -21,7 +22,19 @@ class AuthController
             'email' => 'required|email|max:150',
             'password' => 'required|min:6',
             'rol' => 'required|in:cliente,gomero',
+            'terminos_version' => 'max:20',
         ]);
+
+        if (($body['acepta_terminos'] ?? false) !== true) {
+            $errors['acepta_terminos'][] = 'Tenes que aceptar los terminos y condiciones';
+        }
+
+        $vehiculo = [];
+        $fotoVehiculo = null;
+        if (($body['rol'] ?? null) === 'gomero') {
+            [$vehiculo, $fotoVehiculo, $erroresVehiculo] = VehiculoValidator::validar($body['vehiculo'] ?? null, true);
+            $errors = array_merge($errors, $erroresVehiculo);
+        }
 
         if (!empty($errors)) {
             Response::error('Datos invalidos', 422, ['errores' => $errors]);
@@ -40,10 +53,12 @@ class AuthController
             'password' => $hashedPassword,
             'telefono' => $body['telefono'] ?? null,
             'rol' => $body['rol'],
+            'terminos_version' => $body['terminos_version'] ?? null,
         ]);
 
         if ($body['rol'] === 'gomero') {
-            Gomero::createForUsuario($userId);
+            Gomero::createForUsuario($userId, $vehiculo);
+            Gomero::guardarFotoVehiculo($userId, $fotoVehiculo);
         }
 
         $user = Usuario::toPublicArray(Usuario::findById($userId));

@@ -6,13 +6,70 @@ use Gomeria\Config\Database;
 
 class Gomero
 {
-    public static function createForUsuario(int $usuarioId): int
+    public static function createForUsuario(int $usuarioId, array $vehiculo = []): int
     {
         $stmt = Database::connection()->prepare(
-            'INSERT INTO gomeros (usuario_id) VALUES (:usuario_id)'
+            'INSERT INTO gomeros (usuario_id, vehiculo_tipo, vehiculo_marca_modelo, vehiculo_color, vehiculo_patente)
+             VALUES (:usuario_id, :tipo, :marca_modelo, :color, :patente)'
+        );
+        $stmt->execute([
+            'usuario_id' => $usuarioId,
+            'tipo' => $vehiculo['tipo'] ?? null,
+            'marca_modelo' => $vehiculo['marca_modelo'] ?? null,
+            'color' => $vehiculo['color'] ?? null,
+            'patente' => $vehiculo['patente'] ?? null,
+        ]);
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    public static function actualizarVehiculo(int $usuarioId, array $vehiculo): void
+    {
+        $stmt = Database::connection()->prepare(
+            'UPDATE gomeros SET vehiculo_tipo = :tipo, vehiculo_marca_modelo = :marca_modelo,
+                vehiculo_color = :color, vehiculo_patente = :patente
+             WHERE usuario_id = :usuario_id'
+        );
+        $stmt->execute([
+            'usuario_id' => $usuarioId,
+            'tipo' => $vehiculo['tipo'],
+            'marca_modelo' => $vehiculo['marca_modelo'],
+            'color' => $vehiculo['color'],
+            'patente' => $vehiculo['patente'],
+        ]);
+    }
+
+    public static function guardarFotoVehiculo(int $usuarioId, string $base64): void
+    {
+        $stmt = Database::connection()->prepare(
+            'INSERT INTO vehiculo_fotos (usuario_id, imagen) VALUES (:usuario_id, :imagen)
+             ON DUPLICATE KEY UPDATE imagen = VALUES(imagen)'
+        );
+        $stmt->execute(['usuario_id' => $usuarioId, 'imagen' => $base64]);
+    }
+
+    public static function fotoVehiculo(int $usuarioId): ?string
+    {
+        $stmt = Database::connection()->prepare(
+            'SELECT imagen FROM vehiculo_fotos WHERE usuario_id = :usuario_id LIMIT 1'
         );
         $stmt->execute(['usuario_id' => $usuarioId]);
-        return (int) Database::connection()->lastInsertId();
+        $imagen = $stmt->fetchColumn();
+        return $imagen === false ? null : $imagen;
+    }
+
+    /**
+     * La foto del vehiculo la ve el propio gomero o un cliente al que le haya tomado algun pedido.
+     */
+    public static function puedeVerVehiculo(int $gomeroId, int $usuarioId): bool
+    {
+        if ($gomeroId === $usuarioId) {
+            return true;
+        }
+        $stmt = Database::connection()->prepare(
+            'SELECT 1 FROM solicitudes WHERE gomero_id = :gomero_id AND cliente_id = :cliente_id LIMIT 1'
+        );
+        $stmt->execute(['gomero_id' => $gomeroId, 'cliente_id' => $usuarioId]);
+        return (bool) $stmt->fetchColumn();
     }
 
     public static function findByUsuarioId(int $usuarioId): ?array
