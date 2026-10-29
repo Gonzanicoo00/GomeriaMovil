@@ -4,8 +4,10 @@ namespace Gomeria\Controllers;
 
 use Gomeria\Helpers\Response;
 use Gomeria\Helpers\Validator;
+use Gomeria\Helpers\VehiculoValidator;
 use Gomeria\Middleware\AuthMiddleware;
 use Gomeria\Models\Gomero;
+use Gomeria\Models\Usuario;
 
 class GomeroController
 {
@@ -62,6 +64,64 @@ class GomeroController
         }
 
         Response::success(Gomero::findDisponiblesCercanos((float) $lat, (float) $lng));
+    }
+
+    /**
+     * El gomero edita sus datos personales y los de su vehiculo.
+     * La foto es opcional: si no viene, se conserva la que ya tenia.
+     */
+    public static function actualizarPerfil(): void
+    {
+        $usuarioId = (int) AuthMiddleware::user()['sub'];
+        $body = self::input();
+
+        $errors = Validator::validate($body, [
+            'nombre' => 'required|min:2|max:100',
+            'apellido' => 'required|min:2|max:100',
+            'telefono' => 'max:30',
+        ]);
+
+        $tieneFoto = Gomero::fotoVehiculo($usuarioId) !== null;
+        [$vehiculo, $foto, $erroresVehiculo] = VehiculoValidator::validar($body['vehiculo'] ?? null, !$tieneFoto);
+        $errors = array_merge($errors, $erroresVehiculo);
+
+        if (!empty($errors)) {
+            Response::error('Datos invalidos', 422, ['errores' => $errors]);
+        }
+
+        Usuario::updateProfile($usuarioId, [
+            'nombre' => trim($body['nombre']),
+            'apellido' => trim($body['apellido']),
+            'telefono' => trim((string) ($body['telefono'] ?? '')) ?: null,
+        ]);
+        Gomero::actualizarVehiculo($usuarioId, $vehiculo);
+        if ($foto !== null) {
+            Gomero::guardarFotoVehiculo($usuarioId, $foto);
+        }
+
+        $data = Usuario::toPublicArray(Usuario::findById($usuarioId));
+        $data['gomero'] = Gomero::findByUsuarioId($usuarioId);
+        Response::success($data);
+    }
+
+    /**
+     * Foto del vehiculo de un gomero. Solo la ve el propio gomero o un cliente al que atendio.
+     */
+    public static function fotoVehiculo(array $params): void
+    {
+        $user = AuthMiddleware::user();
+        $gomeroId = (int) $params['id'];
+
+        if (!Gomero::puedeVerVehiculo($gomeroId, (int) $user['sub'])) {
+            Response::error('No tenes acceso a esta foto', 403);
+        }
+
+        $foto = Gomero::fotoVehiculo($gomeroId);
+        if ($foto === null) {
+            Response::error('El gomero no cargo foto del vehiculo', 404);
+        }
+
+        Response::success(['foto' => $foto]);
     }
 
     private static function input(): array

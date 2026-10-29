@@ -26,8 +26,8 @@ class Usuario
     public static function create(array $data): int
     {
         $stmt = Database::connection()->prepare(
-            'INSERT INTO usuarios (nombre, apellido, email, password, telefono, rol)
-             VALUES (:nombre, :apellido, :email, :password, :telefono, :rol)'
+            'INSERT INTO usuarios (nombre, apellido, email, password, telefono, rol, terminos_aceptados_en, terminos_version)
+             VALUES (:nombre, :apellido, :email, :password, :telefono, :rol, NOW(), :terminos_version)'
         );
         $stmt->execute([
             'nombre' => $data['nombre'],
@@ -36,6 +36,7 @@ class Usuario
             'password' => $data['password'],
             'telefono' => $data['telefono'] ?? null,
             'rol' => $data['rol'],
+            'terminos_version' => $data['terminos_version'] ?? null,
         ]);
 
         return (int) Database::connection()->lastInsertId();

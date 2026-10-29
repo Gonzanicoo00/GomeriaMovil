@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     rol ENUM('cliente', 'gomero', 'admin') NOT NULL DEFAULT 'cliente',
     foto_perfil VARCHAR(255) NULL,
     push_token VARCHAR(255) NULL,
+    terminos_aceptados_en DATETIME NULL,
+    terminos_version VARCHAR(20) NULL,
     activo TINYINT(1) NOT NULL DEFAULT 1,
     fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -26,6 +28,10 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
 -- Compatibilidad con bases ya creadas antes de agregar push_token.
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS push_token VARCHAR(255) NULL;
+
+-- Compatibilidad con bases ya creadas antes de registrar la aceptacion de terminos.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS terminos_aceptados_en DATETIME NULL;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS terminos_version VARCHAR(20) NULL;
 
 -- =========================================================
 -- gomeros: datos especificos del prestador de servicio,
@@ -44,12 +50,33 @@ CREATE TABLE IF NOT EXISTS gomeros (
     calificacion_promedio DECIMAL(3,2) NOT NULL DEFAULT 0.00,
     total_servicios INT UNSIGNED NOT NULL DEFAULT 0,
     documento_verificado TINYINT(1) NOT NULL DEFAULT 0,
+    vehiculo_tipo ENUM('moto', 'auto', 'camioneta') NULL,
+    vehiculo_marca_modelo VARCHAR(80) NULL,
+    vehiculo_color VARCHAR(30) NULL,
+    vehiculo_patente VARCHAR(10) NULL,
     ubicacion_actualizada_en DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_gomeros_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
     INDEX idx_gomeros_disponible (disponible),
     INDEX idx_gomeros_ubicacion (latitud, longitud)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Compatibilidad con bases ya creadas antes de pedir los datos del vehiculo.
+ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_tipo ENUM('moto', 'auto', 'camioneta') NULL AFTER documento_verificado;
+ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_marca_modelo VARCHAR(80) NULL AFTER vehiculo_tipo;
+ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_color VARCHAR(30) NULL AFTER vehiculo_marca_modelo;
+ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_patente VARCHAR(10) NULL AFTER vehiculo_color;
+
+-- =========================================================
+-- vehiculo_fotos: foto del vehiculo de cada gomero (JPEG en base64).
+-- Va en una tabla aparte para no arrastrarla en cada SELECT g.*.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS vehiculo_fotos (
+    usuario_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    imagen MEDIUMTEXT NOT NULL,
+    actualizada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_vehiculo_fotos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =========================================================

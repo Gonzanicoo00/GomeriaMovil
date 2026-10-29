@@ -129,6 +129,7 @@ export default function GomeroHomeScreen({ navigation }: Props) {
   };
 
   const calificacion = usuario?.gomero?.calificacion_promedio;
+  const faltaVehiculo = !!usuario?.gomero && (!usuario.gomero.vehiculo_tipo || !usuario.gomero.vehiculo_patente);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
@@ -147,6 +148,19 @@ export default function GomeroHomeScreen({ navigation }: Props) {
         </PressableScale>
         <IconButton icon="time-outline" variante="suave" onPress={() => navigation.navigate('Historial')} accessibilityLabel="Ver historial" />
       </View>
+
+      {faltaVehiculo && (
+        <PressableScale style={styles.avisoVehiculo} onPress={() => navigation.navigate('MiPerfil')} accessibilityRole="button">
+          <View style={styles.avisoIcono}>
+            <Ionicons name="car-outline" size={20} color={colors.warning} />
+          </View>
+          <View style={styles.avisoTexto}>
+            <Text style={styles.avisoTitulo}>Cargá los datos de tu vehículo</Text>
+            <Text style={styles.avisoSub}>El cliente ve la foto y la patente para reconocerte.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </PressableScale>
+      )}
 
       <View style={styles.disponibleBox}>
         <View style={styles.disponibleTextoBox}>
@@ -207,6 +221,7 @@ export default function GomeroHomeScreen({ navigation }: Props) {
         usuario={usuario}
         onClose={() => setPerfilAbierto(false)}
         onHistorial={() => navigation.navigate('Historial')}
+        onMiPerfil={() => navigation.navigate('MiPerfil')}
         onLogout={async () => {
           const ok = await confirmar({
             titulo: '¿Cerrar sesión?',
@@ -232,6 +247,26 @@ const createStyles = (colors: ThemeColors) =>
   saludo: { ...typography.heading, color: colors.secondary },
   calificacionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
   subtitulo: { ...typography.smallStrong, ...tabular, color: colors.textMuted },
+  avisoVehiculo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.warningLight,
+    marginBottom: spacing.md,
+  },
+  avisoIcono: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avisoTexto: { flex: 1 },
+  avisoTitulo: { ...typography.smallStrong, color: colors.text },
+  avisoSub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xxs },
   disponibleBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',

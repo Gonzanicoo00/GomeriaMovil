@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +14,14 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthHero } from '../../components/AuthHero';
 import { PressableScale } from '../../components/Animated';
 import { Button } from '../../components/Button';
+import {
+  DatosVehiculo,
+  ErroresVehiculo,
+  VEHICULO_VACIO,
+  VehiculoForm,
+  validarVehiculo,
+  vehiculoParaApi,
+} from '../../components/VehiculoForm';
 import { Input } from '../../components/Input';
 import { Logo } from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +33,7 @@ import { ThemeColors, radius, spacing, typography } from '../../theme';
 import { Rol } from '../../types';
 import { esEmailValido } from '../../utils/validation';
 import { AuthStackParamList } from '../../navigation/types';
+import { TERMINOS_VERSION } from './TerminosScreen';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -33,9 +42,10 @@ interface Errores {
   apellido?: string;
   email?: string;
   password?: string;
+  terminos?: string;
 }
 
-export default function RegisterScreen({ navigation }: Props) {
+export default function RegisterScreen({ navigation, route }: Props) {
   const { registrar } = useAuth();
   const { toast } = useFeedback();
   const { colors } = useTheme();
@@ -49,6 +59,18 @@ export default function RegisterScreen({ navigation }: Props) {
   const [rol, setRol] = useState<Rol>('cliente');
   const [loading, setLoading] = useState(false);
   const [errores, setErrores] = useState<Errores>({});
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const [vehiculo, setVehiculo] = useState<DatosVehiculo>(VEHICULO_VACIO);
+  const [erroresVehiculo, setErroresVehiculo] = useState<ErroresVehiculo>({});
+  const esGomero = rol === 'gomero';
+
+  // Al volver de la pantalla de términos con "Acepto", se marca la casilla.
+  useEffect(() => {
+    if (route.params?.aceptoTerminos) {
+      setAceptaTerminos(true);
+      setErrores((e) => ({ ...e, terminos: undefined }));
+    }
+  }, [route.params?.aceptoTerminos]);
 
   const validar = (): boolean => {
     const nuevos: Errores = {};
@@ -58,9 +80,12 @@ export default function RegisterScreen({ navigation }: Props) {
     else if (!esEmailValido(email)) nuevos.email = 'El email no es válido';
     if (!password) nuevos.password = 'Ingresá una contraseña';
     else if (password.length < 6) nuevos.password = 'Debe tener al menos 6 caracteres';
+    const nuevosVehiculo = esGomero ? validarVehiculo(vehiculo) : {};
+    if (!aceptaTerminos) nuevos.terminos = 'Tenés que aceptar los términos para continuar';
 
     setErrores(nuevos);
-    return Object.keys(nuevos).length === 0;
+    setErroresVehiculo(nuevosVehiculo);
+    return Object.keys(nuevos).length === 0 && Object.keys(nuevosVehiculo).length === 0;
   };
 
   const handleRegister = async () => {
@@ -74,6 +99,9 @@ export default function RegisterScreen({ navigation }: Props) {
         password,
         telefono: telefono.trim() || undefined,
         rol,
+        acepta_terminos: aceptaTerminos,
+        terminos_version: TERMINOS_VERSION,
+        vehiculo: esGomero ? vehiculoParaApi(vehiculo) : undefined,
       });
     } catch (err) {
       toast({ tipo: 'error', titulo: 'No se pudo crear la cuenta', mensaje: getErrorMessage(err) });
@@ -159,6 +187,51 @@ export default function RegisterScreen({ navigation }: Props) {
             error={errores.password}
           />
 
+          {esGomero && (
+            <View style={styles.vehiculo}>
+              <Text style={styles.vehiculoTitulo}>Tu vehículo de trabajo</Text>
+              <Text style={styles.vehiculoSub}>
+                Se lo mostramos al cliente cuando aceptás un pedido, para que te reconozca al llegar.
+              </Text>
+
+              <VehiculoForm
+                valor={vehiculo}
+                onChange={setVehiculo}
+                errores={erroresVehiculo}
+                onErroresChange={setErroresVehiculo}
+              />
+            </View>
+          )}
+
+          <View style={styles.terminos}>
+            <Pressable
+              onPress={() => {
+                haptics.seleccion();
+                setAceptaTerminos((v) => !v);
+                setErrores((e) => ({ ...e, terminos: undefined }));
+              }}
+              hitSlop={8}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: aceptaTerminos }}
+              accessibilityLabel="Acepto los Términos y Condiciones"
+              style={[
+                styles.checkbox,
+                aceptaTerminos && styles.checkboxActivo,
+                errores.terminos && !aceptaTerminos && styles.checkboxError,
+              ]}
+            >
+              {aceptaTerminos && <Ionicons name="checkmark" size={16} color={colors.onPrimary} />}
+            </Pressable>
+            <Text style={styles.terminosTexto}>
+              Leí y acepto los{' '}
+              <Text style={styles.terminosLink} onPress={() => navigation.navigate('Terminos')}>
+                Términos y Condiciones
+              </Text>{' '}
+              y la Política de Privacidad.
+            </Text>
+          </View>
+          {errores.terminos && <Text style={styles.terminosError}>{errores.terminos}</Text>}
+
           <Button title="Crear cuenta" icon="checkmark-outline" onPress={handleRegister} loading={loading} style={styles.button} />
 
           <View style={styles.pie}>
@@ -238,6 +311,38 @@ const createStyles = (colors: ThemeColors) =>
   },
   rolOptionText: { ...typography.bodyStrong, color: colors.textMuted },
   rolOptionTextActive: { color: colors.primary },
+  vehiculo: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingTop: spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  vehiculoTitulo: { ...typography.heading, color: colors.text },
+  vehiculoSub: { ...typography.small, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.lg },
+  terminos: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    marginTop: 1,
+    borderRadius: radius.sm - 2,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActivo: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxError: { borderColor: colors.danger },
+  terminosTexto: { ...typography.small, color: colors.textMuted, flex: 1 },
+  terminosLink: { ...typography.smallStrong, color: colors.primary, textDecorationLine: 'underline' },
+  terminosError: { ...typography.caption, color: colors.danger, marginTop: -spacing.sm, marginBottom: spacing.md },
   button: { marginTop: spacing.sm },
   pie: {
     flexDirection: 'row',

@@ -38,14 +38,14 @@ class Validator
                     case 'min':
                         if (is_string($value) && mb_strlen($value) < (int) $param) {
                             $errors[$field][] = "El campo {$field} debe tener al menos {$param} caracteres";
-                        } elseif (is_numeric($value) && $value < (float) $param) {
+                        } elseif (!is_string($value) && is_numeric($value) && $value < (float) $param) {
                             $errors[$field][] = "El campo {$field} debe ser mayor o igual a {$param}";
                         }
                         break;
                     case 'max':
                         if (is_string($value) && mb_strlen($value) > (int) $param) {
                             $errors[$field][] = "El campo {$field} debe tener como maximo {$param} caracteres";
-                        } elseif (is_numeric($value) && $value > (float) $param) {
+                        } elseif (!is_string($value) && is_numeric($value) && $value > (float) $param) {
                             $errors[$field][] = "El campo {$field} debe ser menor o igual a {$param}";
                         }
                         break;

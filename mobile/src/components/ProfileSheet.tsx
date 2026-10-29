@@ -13,10 +13,12 @@ interface Props {
   onClose: () => void;
   onHistorial: () => void;
   onLogout: () => void;
+  /** Si viene, se muestra la opción para editar el perfil. */
+  onMiPerfil?: () => void;
 }
 
 /** Menu de perfil que sube desde abajo al tocar el avatar. */
-export function ProfileSheet({ visible, usuario, onClose, onHistorial, onLogout }: Props) {
+export function ProfileSheet({ visible, usuario, onClose, onHistorial, onLogout, onMiPerfil }: Props) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const insets = useSafeAreaInsets();
@@ -43,6 +45,9 @@ export function ProfileSheet({ visible, usuario, onClose, onHistorial, onLogout 
           </View>
         </View>
 
+        {onMiPerfil && (
+          <Opcion icon="person-circle-outline" label="Mi perfil y vehículo" onPress={() => elegir(onMiPerfil)} colors={colors} />
+        )}
         <Opcion icon="time-outline" label="Historial de servicios" onPress={() => elegir(onHistorial)} colors={colors} />
         <Opcion icon="log-out-outline" label="Cerrar sesión" onPress={() => elegir(onLogout)} colors={colors} danger />
       </View>

@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import { TOKEN_KEY } from '../api/client';
 import * as AuthApi from '../api/auth';
-import { Rol, Usuario } from '../types';
+import { Usuario } from '../types';
 import { dispositivoProtegido } from '../security/biometria';
 
 /** Si la app estuvo en segundo plano mas que esto, se vuelve a pedir huella o PIN. */
@@ -29,14 +29,7 @@ interface AuthContextValue {
   bloqueado: boolean;
   desbloquear: () => void;
   login: (email: string, password: string) => Promise<void>;
-  registrar: (payload: {
-    nombre: string;
-    apellido: string;
-    email: string;
-    password: string;
-    telefono?: string;
-    rol: Rol;
-  }) => Promise<void>;
+  registrar: (payload: AuthApi.RegistroPayload) => Promise<void>;
   logout: () => Promise<void>;
   refrescarUsuario: () => Promise<void>;
 }

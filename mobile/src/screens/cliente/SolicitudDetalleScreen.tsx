@@ -15,6 +15,7 @@ import { DetalleSkeleton } from '../../components/Skeleton';
 import { ErrorState } from '../../components/ErrorState';
 import { DESCRIPCION_ESTADO, EstadoTimeline } from '../../components/EstadoTimeline';
 import { ServicioCompletado } from '../../components/ServicioCompletado';
+import { VehiculoGomero } from '../../components/VehiculoGomero';
 import { ClientePin, GomeroPinAnimado, mapStyleClaro, mapStyleOscuro } from '../../components/MapPins';
 import * as SolicitudesApi from '../../api/solicitudes';
 import * as TrackingApi from '../../api/tracking';
@@ -261,32 +262,44 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
           <EstadoTimeline estado={solicitud.estado} soloPasos />
 
           {solicitud.gomero_nombre ? (
-            <View style={styles.persona}>
-              <Avatar nombre={solicitud.gomero_nombre} apellido={solicitud.gomero_apellido} size={48} />
-              <View style={styles.personaInfo}>
-                <Text style={styles.personaNombre} numberOfLines={1}>
-                  {solicitud.gomero_nombre} {solicitud.gomero_apellido}
-                </Text>
-                <Text style={styles.personaRol}>
-                  {posicionGomero && CON_TRACKING.includes(solicitud.estado)
-                    ? `Ubicación ${formatRelativeTime(posicionGomero.registrado_en)}`
-                    : 'Tu gomero asignado'}
-                  {distancia !== null ? ` · ${distancia.toFixed(1)} km` : ''}
-                </Text>
+            <>
+              <View style={styles.persona}>
+                <Avatar nombre={solicitud.gomero_nombre} apellido={solicitud.gomero_apellido} size={48} />
+                <View style={styles.personaInfo}>
+                  <Text style={styles.personaNombre} numberOfLines={1}>
+                    {solicitud.gomero_nombre} {solicitud.gomero_apellido}
+                  </Text>
+                  <Text style={styles.personaRol}>
+                    {posicionGomero && CON_TRACKING.includes(solicitud.estado)
+                      ? `Ubicación ${formatRelativeTime(posicionGomero.registrado_en)}`
+                      : 'Tu gomero asignado'}
+                    {distancia !== null ? ` · ${distancia.toFixed(1)} km` : ''}
+                  </Text>
+                </View>
+                {mostrarChat && (
+                  <IconButton icon="chatbubble-ellipses" variante="suave" onPress={abrirChat} badge={noLeidos} accessibilityLabel="Abrir chat con el gomero" />
+                )}
+                {solicitud.gomero_telefono && chatActivo ? (
+                  <IconButton
+                    icon="call"
+                    variante="solido"
+                    color={colors.success}
+                    onPress={() => Linking.openURL(`tel:${solicitud.gomero_telefono}`)}
+                    accessibilityLabel="Llamar al gomero"
+                  />
+                ) : null}
               </View>
-              {mostrarChat && (
-                <IconButton icon="chatbubble-ellipses" variante="suave" onPress={abrirChat} badge={noLeidos} accessibilityLabel="Abrir chat con el gomero" />
-              )}
-              {solicitud.gomero_telefono && chatActivo ? (
-                <IconButton
-                  icon="call"
-                  variante="solido"
-                  color={colors.success}
-                  onPress={() => Linking.openURL(`tel:${solicitud.gomero_telefono}`)}
-                  accessibilityLabel="Llamar al gomero"
+              {solicitud.gomero_id ? (
+                <VehiculoGomero
+                  gomeroId={solicitud.gomero_id}
+                  tipo={solicitud.vehiculo_tipo}
+                  marcaModelo={solicitud.vehiculo_marca_modelo}
+                  color={solicitud.vehiculo_color}
+                  patente={solicitud.vehiculo_patente}
+                  tieneFoto={!!Number(solicitud.vehiculo_tiene_foto)}
                 />
               ) : null}
-            </View>
+            </>
           ) : solicitud.estado === 'pendiente' ? (
             <View style={styles.buscando}>
               <MaterialCommunityIcons name="radar" size={22} color={colors.warning} />

@@ -1,6 +1,7 @@
 export type AuthStackParamList = {
   Login: undefined;
-  Register: undefined;
+  Register: { aceptoTerminos?: boolean } | undefined;
+  Terminos: undefined;
 };
 
 export type ChatParams = {
@@ -23,6 +24,7 @@ export type ClienteStackParamList = {
 
 export type GomeroStackParamList = {
   GomeroHome: undefined;
+  MiPerfil: undefined;
   SolicitudActiva: { solicitudId: number };
   Historial: undefined;
   Chat: ChatParams;
