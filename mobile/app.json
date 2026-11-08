@@ -21,10 +21,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "config": {
         "googleMaps": {
@@ -78,6 +78,12 @@
       ],
       "expo-font",
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d1de48b5-f628-4566-b668-6db0dcd87d83"
+      }
+    },
+    "owner": "gonzanicoo"
   }
 }
