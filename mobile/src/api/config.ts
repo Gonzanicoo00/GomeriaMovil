@@ -1,6 +1,9 @@
-// IP local de la maquina donde corre XAMPP. Como el celular (fisico o emulador)
-// no puede usar "localhost" para llegar a tu PC, hay que apuntar a la IP de tu red WiFi.
-// Cambiala si tu PC tiene otra IP (correla con `ipconfig` y buscá "IPv4").
-const LAN_IP = '192.168.253.106';
+// URL del backend.
+// - En los builds de EAS (APK) viene de EXPO_PUBLIC_API_URL, definida en eas.json
+//   (ej. https://gomeria-api.onrender.com/api).
+// - En desarrollo, si no está definida, se usa XAMPP en la IP local de tu PC.
+//   El celular no puede usar "localhost": poné la IPv4 de tu red WiFi (`ipconfig`).
+const LAN_IP = '192.168.1.5';
 
-export const API_BASE_URL = `http://${LAN_IP}/Gomeria_movil/backend/public/api`;
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || `http://${LAN_IP}/Gomeria_movil/backend/public/api`;

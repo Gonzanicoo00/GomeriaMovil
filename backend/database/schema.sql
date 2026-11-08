@@ -26,12 +26,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     INDEX idx_usuarios_rol (rol)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Compatibilidad con bases ya creadas antes de agregar push_token.
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS push_token VARCHAR(255) NULL;
 
--- Compatibilidad con bases ya creadas antes de registrar la aceptacion de terminos.
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS terminos_aceptados_en DATETIME NULL;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS terminos_version VARCHAR(20) NULL;
 
 -- =========================================================
 -- gomeros: datos especificos del prestador de servicio,
@@ -62,21 +57,16 @@ CREATE TABLE IF NOT EXISTS gomeros (
     INDEX idx_gomeros_ubicacion (latitud, longitud)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Compatibilidad con bases ya creadas antes de pedir los datos del vehiculo.
-ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_tipo ENUM('moto', 'auto', 'camioneta') NULL AFTER documento_verificado;
-ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_marca_modelo VARCHAR(80) NULL AFTER vehiculo_tipo;
-ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_color VARCHAR(30) NULL AFTER vehiculo_marca_modelo;
-ALTER TABLE gomeros ADD COLUMN IF NOT EXISTS vehiculo_patente VARCHAR(10) NULL AFTER vehiculo_color;
 
 -- =========================================================
--- vehiculo_fotos: foto del vehiculo de cada gomero (JPEG en base64).
+-- gomero_fotos: foto de la cara de cada gomero (JPEG en base64).
 -- Va en una tabla aparte para no arrastrarla en cada SELECT g.*.
 -- =========================================================
-CREATE TABLE IF NOT EXISTS vehiculo_fotos (
+CREATE TABLE IF NOT EXISTS gomero_fotos (
     usuario_id INT UNSIGNED NOT NULL PRIMARY KEY,
     imagen MEDIUMTEXT NOT NULL,
     actualizada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_vehiculo_fotos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    CONSTRAINT fk_gomero_fotos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =========================================================

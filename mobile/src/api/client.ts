@@ -6,7 +6,9 @@ export const TOKEN_KEY = 'gomeria_token';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  // 60 s: el plan gratis de Render tarda ~50 s en despertar el servidor
+  // si estuvo 15 minutos sin uso.
+  timeout: 60000,
 });
 
 apiClient.interceptors.request.use(async (config) => {

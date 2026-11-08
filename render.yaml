@@ -1,0 +1,40 @@
+# Blueprint de Render: crea el backend PHP a partir de backend/Dockerfile.
+# En Render: New > Blueprint > elegir este repo. Los valores marcados con
+# "sync: false" se piden en el panel al crear el servicio.
+services:
+  - type: web
+    name: gomeria-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_TIMEZONE
+        value: America/Argentina/Buenos_Aires
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: DB_SSL_CA
+        sync: false
+      - key: DB_TIMEZONE
+        value: "-03:00"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGO
+        value: HS256
+      - key: JWT_TTL
+        value: "86400"
