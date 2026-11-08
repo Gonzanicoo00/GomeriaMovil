@@ -2,37 +2,33 @@
 
 | Parte | Servicio |
 |---|---|
-| Base de datos MySQL | Aiven (plan Free) |
+| Base de datos (MySQL compatible) | TiDB Cloud Starter (gratis, sin vencimiento, límite de gasto $0) |
 | Backend PHP | Render (Web Service gratis, Docker) |
 | App Android | EAS Build (APK) |
 
-## 1. Base de datos (Aiven)
+## 1. Base de datos (TiDB Cloud)
 
-1. Crear cuenta en https://aiven.io → **Create service** → **MySQL** → plan **Free**.
-2. En la pestaña *Overview* anotar: Host, Port, User (`avnadmin`), Password, Database (`defaultdb`).
-3. Descargar el **CA certificate** (`ca.pem`).
-4. Conectarse con MySQL Workbench o HeidiSQL (con SSL y ese `ca.pem`) e importar
-   `backend/database/schema.sql`.
+1. En https://tidbcloud.com → **Create Resource** → plan **Starter**, **MySQL Compatible**,
+   región **N. Virginia (us-east-1)**, límite de gasto **$0**.
+2. **SQL Editor** → pegar el contenido de `backend/database/schema.sql` precedido de
+   `CREATE DATABASE IF NOT EXISTS gomeria; USE gomeria;` → **Shift+Ctrl+Enter** (ejecutar todo).
+3. **Connect** → anotar Host, Port (4000), Username; **Generate Password** y guardarla.
+
+TiDB usa un certificado público: no hace falta subir ningún `ca.pem`.
 
 > `backend/database/migraciones_mariadb.sql` es solo para bases viejas de XAMPP.
-> No correrlo en Aiven.
 
 ## 2. Backend (Render)
 
-1. Subir los cambios a GitHub (`git push`).
-2. En https://render.com → **New** → **Blueprint** → elegir el repo. Toma `render.yaml`.
-3. Completar las variables que pide:
-   - `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`: los de Aiven.
-   - `DB_SSL_CA`: `/etc/secrets/ca.pem`
-4. En el servicio → **Environment** → **Secret Files** → agregar `ca.pem` con el contenido
-   del certificado de Aiven.
-5. Probar: `https://<tu-servicio>.onrender.com/api/health` y `/api/servicios`.
+1. En https://render.com → **New** → **Blueprint** → elegir el repo. Toma `render.yaml`.
+2. Completar `DB_HOST`, `DB_USERNAME` y `DB_PASSWORD` con los datos de TiDB.
+3. Probar: `https://<tu-servicio>.onrender.com/api/health` y `/api/servicios`.
 
 `JWT_SECRET` lo genera Render solo. `APP_DEBUG` queda en `false`.
 
 ## 3. App Android (EAS)
 
-1. Si el nombre del servicio en Render no quedó `gomeria-api`, cambiar
+1. Si la URL de Render no es `https://gomeria-api.onrender.com`, cambiar
    `EXPO_PUBLIC_API_URL` en `mobile/eas.json`.
 2. Desde `mobile/`:
    ```
