@@ -27,18 +27,19 @@ export async function misBonificaciones() {
   return res.data.data;
 }
 
-/** Foto del vehículo de un gomero en base64 (JPEG). */
-export async function fotoVehiculo(usuarioId: number) {
-  const res = await apiClient.get<{ data: { foto: string } }>(`/gomeros/${usuarioId}/vehiculo-foto`);
+/** Foto de la cara de un gomero en base64 (JPEG). */
+export async function fotoGomero(usuarioId: number) {
+  const res = await apiClient.get<{ data: { foto: string } }>(`/gomeros/${usuarioId}/foto`);
   return res.data.data.foto;
 }
 
-/** El gomero edita sus datos y los de su vehículo. Sin foto nueva, se conserva la guardada. */
+/** El gomero edita sus datos, su foto y los de su vehículo. Sin foto nueva, se conserva la guardada. */
 export async function actualizarPerfil(payload: {
   nombre: string;
   apellido: string;
   telefono: string;
   vehiculo: NonNullable<RegistroPayload['vehiculo']>;
+  foto?: string;
 }) {
   const res = await apiClient.put<{ data: Usuario }>('/gomeros/perfil', payload);
   return res.data.data;

@@ -22,10 +22,11 @@ interface Props {
   cargando?: boolean;
 }
 
-// Ancho maximo con el que se sube la foto: alcanza para verla bien y pesa ~100 KB.
-const ANCHO_MAXIMO = 1024;
+// Ancho maximo con el que se sube la foto: alcanza para reconocer la cara y pesa ~50 KB.
+const ANCHO_MAXIMO = 600;
 
-export function FotoVehiculoPicker({ uri, onChange, error, cargando }: Props) {
+/** Foto de la cara del gomero, para que el cliente sepa a quién esperar. */
+export function FotoPerfilPicker({ uri, onChange, error, cargando }: Props) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
   const { toast } = useFeedback();
@@ -52,8 +53,9 @@ export function FotoVehiculoPicker({ uri, onChange, error, cargando }: Props) {
     const opciones: ImagePicker.ImagePickerOptions = {
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [1, 1],
       quality: 1,
+      cameraType: ImagePicker.CameraType.front,
     };
     const resultado =
       origen === 'camara'
@@ -79,18 +81,20 @@ export function FotoVehiculoPicker({ uri, onChange, error, cargando }: Props) {
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>Foto del vehículo</Text>
-      <View style={[styles.preview, error && !uri ? styles.previewError : null]}>
-        {procesando || cargando ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : uri ? (
-          <Image source={{ uri }} style={styles.imagen} resizeMode="cover" />
-        ) : (
-          <>
-            <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
-            <Text style={styles.ayuda}>Que se vea el vehículo completo y la patente.</Text>
-          </>
-        )}
+      <Text style={styles.label}>Tu foto</Text>
+      <View style={styles.fila}>
+        <View style={[styles.preview, error && !uri ? styles.previewError : null]}>
+          {procesando || cargando ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : uri ? (
+            <Image source={{ uri }} style={styles.imagen} resizeMode="cover" accessibilityLabel="Tu foto" />
+          ) : (
+            <Ionicons name="person-outline" size={36} color={colors.textMuted} />
+          )}
+        </View>
+        <Text style={styles.ayuda}>
+          Una foto de tu cara, de frente y con buena luz. El cliente la ve para reconocerte cuando llegás.
+        </Text>
       </View>
       <View style={styles.acciones}>
         <Accion icon="camera" label={uri ? 'Sacar otra' : 'Sacar foto'} onPress={() => elegir('camara')} disabled={procesando} />
@@ -122,26 +126,28 @@ function Accion({
   );
 }
 
+const TAMANO_PREVIEW = 96;
+
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     wrapper: { marginBottom: spacing.lg },
     label: { ...typography.smallStrong, color: colors.secondary, marginBottom: spacing.sm },
+    fila: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
     preview: {
-      aspectRatio: 4 / 3,
-      borderRadius: radius.lg,
+      width: TAMANO_PREVIEW,
+      height: TAMANO_PREVIEW,
+      borderRadius: TAMANO_PREVIEW / 2,
       borderWidth: 1.5,
       borderStyle: 'dashed',
       borderColor: colors.border,
       backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.sm,
       overflow: 'hidden',
-      paddingHorizontal: spacing.xxl,
     },
     previewError: { borderColor: colors.danger },
     imagen: StyleSheet.absoluteFill,
-    ayuda: { ...typography.small, color: colors.textMuted, textAlign: 'center' },
+    ayuda: { ...typography.small, color: colors.textMuted, flex: 1 },
     acciones: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
     accion: {
       flex: 1,

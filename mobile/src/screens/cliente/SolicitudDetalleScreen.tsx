@@ -17,6 +17,7 @@ import { DESCRIPCION_ESTADO, EstadoTimeline } from '../../components/EstadoTimel
 import { ServicioCompletado } from '../../components/ServicioCompletado';
 import { VehiculoGomero } from '../../components/VehiculoGomero';
 import { ClientePin, GomeroPinAnimado, mapStyleClaro, mapStyleOscuro } from '../../components/MapPins';
+import * as GomerosApi from '../../api/gomeros';
 import * as SolicitudesApi from '../../api/solicitudes';
 import * as TrackingApi from '../../api/tracking';
 import { getErrorMessage } from '../../api/client';
@@ -100,6 +101,20 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   }, [solicitud, solicitudId]);
 
   usePolling(cargarPosicion, 3000, !!solicitud);
+
+  // Foto de la cara del gomero asignado, para que el cliente sepa a quién esperar.
+  const [fotoGomero, setFotoGomero] = useState<string | null>(null);
+  const gomeroConFoto = solicitud?.gomero_id && Number(solicitud.gomero_tiene_foto) ? solicitud.gomero_id : null;
+  useEffect(() => {
+    if (!gomeroConFoto) return;
+    let activo = true;
+    GomerosApi.fotoGomero(gomeroConFoto)
+      .then((base64) => activo && setFotoGomero(`data:image/jpeg;base64,${base64}`))
+      .catch(() => {});
+    return () => {
+      activo = false;
+    };
+  }, [gomeroConFoto]);
 
   const mostrarChat = !!solicitud?.gomero_id && solicitud.estado !== 'cancelada';
   const chatActivo = !!solicitud && !['completada', 'cancelada'].includes(solicitud.estado);
@@ -264,7 +279,7 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
           {solicitud.gomero_nombre ? (
             <>
               <View style={styles.persona}>
-                <Avatar nombre={solicitud.gomero_nombre} apellido={solicitud.gomero_apellido} size={48} />
+                <Avatar nombre={solicitud.gomero_nombre} apellido={solicitud.gomero_apellido} uri={fotoGomero} size={56} />
                 <View style={styles.personaInfo}>
                   <Text style={styles.personaNombre} numberOfLines={1}>
                     {solicitud.gomero_nombre} {solicitud.gomero_apellido}
@@ -289,16 +304,12 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
                   />
                 ) : null}
               </View>
-              {solicitud.gomero_id ? (
-                <VehiculoGomero
-                  gomeroId={solicitud.gomero_id}
-                  tipo={solicitud.vehiculo_tipo}
-                  marcaModelo={solicitud.vehiculo_marca_modelo}
-                  color={solicitud.vehiculo_color}
-                  patente={solicitud.vehiculo_patente}
-                  tieneFoto={!!Number(solicitud.vehiculo_tiene_foto)}
-                />
-              ) : null}
+              <VehiculoGomero
+                tipo={solicitud.vehiculo_tipo}
+                marcaModelo={solicitud.vehiculo_marca_modelo}
+                color={solicitud.vehiculo_color}
+                patente={solicitud.vehiculo_patente}
+              />
             </>
           ) : solicitud.estado === 'pendiente' ? (
             <View style={styles.buscando}>

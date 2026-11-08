@@ -2,6 +2,7 @@
 
 namespace Gomeria\Controllers;
 
+use Gomeria\Helpers\FotoValidator;
 use Gomeria\Helpers\JwtHelper;
 use Gomeria\Helpers\Response;
 use Gomeria\Helpers\Validator;
@@ -30,10 +31,11 @@ class AuthController
         }
 
         $vehiculo = [];
-        $fotoVehiculo = null;
+        $foto = null;
         if (($body['rol'] ?? null) === 'gomero') {
-            [$vehiculo, $fotoVehiculo, $erroresVehiculo] = VehiculoValidator::validar($body['vehiculo'] ?? null, true);
-            $errors = array_merge($errors, $erroresVehiculo);
+            [$vehiculo, $erroresVehiculo] = VehiculoValidator::validar($body['vehiculo'] ?? null);
+            [$foto, $erroresFoto] = FotoValidator::validar($body['foto'] ?? null, true);
+            $errors = array_merge($errors, $erroresVehiculo, $erroresFoto);
         }
 
         if (!empty($errors)) {
@@ -58,7 +60,7 @@ class AuthController
 
         if ($body['rol'] === 'gomero') {
             Gomero::createForUsuario($userId, $vehiculo);
-            Gomero::guardarFotoVehiculo($userId, $fotoVehiculo);
+            Gomero::guardarFoto($userId, $foto);
         }
 
         $user = Usuario::toPublicArray(Usuario::findById($userId));

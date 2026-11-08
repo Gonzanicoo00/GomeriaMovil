@@ -1,19 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as GomerosApi from '../api/gomeros';
-import { Bone, SkeletonGroup } from './Skeleton';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeColors, radius, spacing, typography } from '../theme';
 import { TipoVehiculo } from '../types';
 
 interface Props {
-  gomeroId: number;
   tipo: TipoVehiculo | null | undefined;
   marcaModelo: string | null | undefined;
   color: string | null | undefined;
   patente: string | null | undefined;
-  tieneFoto: boolean;
 }
 
 const ICONO: Record<TipoVehiculo, keyof typeof MaterialCommunityIcons.glyphMap> = {
@@ -28,24 +24,10 @@ const NOMBRE: Record<TipoVehiculo, string> = {
   camioneta: 'Camioneta',
 };
 
-/** Cómo llega el gomero: foto, tipo, modelo, color y patente, para que el cliente lo reconozca. */
-export function VehiculoGomero({ gomeroId, tipo, marcaModelo, color, patente, tieneFoto }: Props) {
+/** Cómo llega el gomero: tipo, modelo, color y patente, para que el cliente lo reconozca. */
+export function VehiculoGomero({ tipo, marcaModelo, color, patente }: Props) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
-  const [foto, setFoto] = useState<string | null>(null);
-  const [cargandoFoto, setCargandoFoto] = useState(tieneFoto);
-
-  useEffect(() => {
-    if (!tieneFoto) return;
-    let activo = true;
-    GomerosApi.fotoVehiculo(gomeroId)
-      .then((base64) => activo && setFoto(base64))
-      .catch(() => {})
-      .finally(() => activo && setCargandoFoto(false));
-    return () => {
-      activo = false;
-    };
-  }, [gomeroId, tieneFoto]);
 
   // Gomeros registrados antes de que se pidieran estos datos.
   if (!tipo && !patente) return null;
@@ -64,18 +46,6 @@ export function VehiculoGomero({ gomeroId, tipo, marcaModelo, color, patente, ti
         </View>
         {patente ? <Patente valor={patente} /> : null}
       </View>
-      {cargandoFoto ? (
-        <SkeletonGroup>
-          <Bone height={180} rounded={0} />
-        </SkeletonGroup>
-      ) : foto ? (
-        <Image
-          source={{ uri: `data:image/jpeg;base64,${foto}` }}
-          style={styles.foto}
-          resizeMode="cover"
-          accessibilityLabel="Foto del vehículo del gomero"
-        />
-      ) : null}
     </View>
   );
 }
@@ -110,7 +80,6 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       overflow: 'hidden',
     },
-    foto: { width: '100%', aspectRatio: 16 / 9, borderRadius: 0 },
     info: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
     icono: {
       width: 40,

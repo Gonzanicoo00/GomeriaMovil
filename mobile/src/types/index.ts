@@ -80,8 +80,8 @@ export interface Solicitud {
   vehiculo_marca_modelo?: string | null;
   vehiculo_color?: string | null;
   vehiculo_patente?: string | null;
-  /** 1 si el gomero asignado cargó foto del vehículo (se pide aparte con fotoVehiculo). */
-  vehiculo_tiene_foto?: number;
+  /** 1 si el gomero asignado cargó su foto (se pide aparte con fotoGomero). */
+  gomero_tiene_foto?: number;
   distancia_km?: number;
 }
 

@@ -28,9 +28,9 @@ export interface RegistroPayload {
     marca_modelo: string;
     color: string;
     patente: string;
-    /** JPEG en base64, sin el prefijo data:. Obligatoria al registrarse. */
-    foto?: string;
   };
+  /** Foto de la cara del gomero: JPEG en base64, sin el prefijo data:. Obligatoria para los gomeros. */
+  foto?: string;
 }
 
 export async function register(payload: RegistroPayload) {

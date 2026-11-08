@@ -156,7 +156,7 @@ export default function GomeroHomeScreen({ navigation }: Props) {
           </View>
           <View style={styles.avisoTexto}>
             <Text style={styles.avisoTitulo}>Cargá los datos de tu vehículo</Text>
-            <Text style={styles.avisoSub}>El cliente ve la foto y la patente para reconocerte.</Text>
+            <Text style={styles.avisoSub}>El cliente ve el modelo y la patente para reconocerte.</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </PressableScale>

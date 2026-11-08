@@ -3,7 +3,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { PressableScale } from './Animated';
 import { Input } from './Input';
-import { FotoElegida, FotoVehiculoPicker } from './FotoVehiculoPicker';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeColors, radius, spacing, typography } from '../theme';
 import { TipoVehiculo } from '../types';
@@ -15,15 +14,11 @@ export interface DatosVehiculo {
   marcaModelo: string;
   color: string;
   patente: string;
-  /** Foto nueva elegida en este formulario (se sube). */
-  foto: FotoElegida | null;
-  /** Foto que ya estaba guardada, solo para mostrarla. */
-  fotoActualUri?: string | null;
 }
 
-export type ErroresVehiculo = Partial<Record<'tipo' | 'marcaModelo' | 'color' | 'patente' | 'foto', string>>;
+export type ErroresVehiculo = Partial<Record<'tipo' | 'marcaModelo' | 'color' | 'patente', string>>;
 
-export const VEHICULO_VACIO: DatosVehiculo = { tipo: null, marcaModelo: '', color: '', patente: '', foto: null };
+export const VEHICULO_VACIO: DatosVehiculo = { tipo: null, marcaModelo: '', color: '', patente: '' };
 
 const TIPOS: { tipo: TipoVehiculo; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
   { tipo: 'moto', label: 'Moto', icon: 'motorbike' },
@@ -38,18 +33,16 @@ export function validarVehiculo(v: DatosVehiculo): ErroresVehiculo {
   if (v.color.trim().length < 3) errores.color = 'Ingresá el color';
   if (!v.patente.trim()) errores.patente = 'Ingresá la patente';
   else if (!esPatenteValida(v.patente)) errores.patente = 'Revisá la patente (ej: AB123CD o ABC123)';
-  if (!v.foto && !v.fotoActualUri) errores.foto = 'Cargá una foto del vehículo';
   return errores;
 }
 
-/** Lo que espera la API. La foto solo viaja si se eligió una nueva. */
+/** Lo que espera la API. */
 export function vehiculoParaApi(v: DatosVehiculo) {
   return {
     tipo: v.tipo as TipoVehiculo,
     marca_modelo: v.marcaModelo.trim(),
     color: v.color.trim(),
     patente: normalizarPatente(v.patente),
-    ...(v.foto ? { foto: v.foto.base64 } : {}),
   };
 }
 
@@ -58,11 +51,9 @@ interface Props {
   onChange: (valor: DatosVehiculo) => void;
   errores: ErroresVehiculo;
   onErroresChange: (errores: ErroresVehiculo) => void;
-  /** Mientras se descarga la foto que ya estaba guardada. */
-  cargandoFoto?: boolean;
 }
 
-export function VehiculoForm({ valor, onChange, errores, onErroresChange, cargandoFoto }: Props) {
+export function VehiculoForm({ valor, onChange, errores, onErroresChange }: Props) {
   const { colors } = useTheme();
   const styles = createStyles(colors);
 
@@ -122,12 +113,6 @@ export function VehiculoForm({ valor, onChange, errores, onErroresChange, cargan
         maxLength={9}
         placeholder={valor.tipo === 'moto' ? 'A123BCD' : 'AB123CD'}
         error={errores.patente}
-      />
-      <FotoVehiculoPicker
-        uri={valor.foto?.uri ?? valor.fotoActualUri ?? null}
-        onChange={(f) => set('foto', f, 'foto')}
-        error={errores.foto}
-        cargando={cargandoFoto}
       />
     </View>
   );

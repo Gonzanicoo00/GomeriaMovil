@@ -41,7 +41,7 @@ $router->put('/api/gomeros/ubicacion', [GomeroController::class, 'actualizarUbic
 $router->put('/api/gomeros/disponibilidad', [GomeroController::class, 'actualizarDisponibilidad'], [$soloGomero]);
 $router->put('/api/gomeros/perfil', [GomeroController::class, 'actualizarPerfil'], [$soloGomero]);
 $router->get('/api/gomeros/{id}/calificaciones', [CalificacionController::class, 'porUsuario']);
-$router->get('/api/gomeros/{id}/vehiculo-foto', [GomeroController::class, 'fotoVehiculo'], [$auth]);
+$router->get('/api/gomeros/{id}/foto', [GomeroController::class, 'foto'], [$auth]);
 $router->get('/api/gomeros/bonificaciones', [BonificacionController::class, 'misBonificaciones'], [$soloGomero]);
 
 // ---- Solicitudes ----

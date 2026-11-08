@@ -14,6 +14,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthHero } from '../../components/AuthHero';
 import { PressableScale } from '../../components/Animated';
 import { Button } from '../../components/Button';
+import { FotoElegida, FotoPerfilPicker } from '../../components/FotoPerfilPicker';
 import {
   DatosVehiculo,
   ErroresVehiculo,
@@ -43,6 +44,7 @@ interface Errores {
   email?: string;
   password?: string;
   terminos?: string;
+  foto?: string;
 }
 
 export default function RegisterScreen({ navigation, route }: Props) {
@@ -62,6 +64,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [vehiculo, setVehiculo] = useState<DatosVehiculo>(VEHICULO_VACIO);
   const [erroresVehiculo, setErroresVehiculo] = useState<ErroresVehiculo>({});
+  const [foto, setFoto] = useState<FotoElegida | null>(null);
   const esGomero = rol === 'gomero';
 
   // Al volver de la pantalla de términos con "Acepto", se marca la casilla.
@@ -80,6 +83,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
     else if (!esEmailValido(email)) nuevos.email = 'El email no es válido';
     if (!password) nuevos.password = 'Ingresá una contraseña';
     else if (password.length < 6) nuevos.password = 'Debe tener al menos 6 caracteres';
+    if (esGomero && !foto) nuevos.foto = 'Cargá una foto de tu cara';
     const nuevosVehiculo = esGomero ? validarVehiculo(vehiculo) : {};
     if (!aceptaTerminos) nuevos.terminos = 'Tenés que aceptar los términos para continuar';
 
@@ -102,6 +106,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
         acepta_terminos: aceptaTerminos,
         terminos_version: TERMINOS_VERSION,
         vehiculo: esGomero ? vehiculoParaApi(vehiculo) : undefined,
+        foto: esGomero ? foto?.base64 : undefined,
       });
     } catch (err) {
       toast({ tipo: 'error', titulo: 'No se pudo crear la cuenta', mensaje: getErrorMessage(err) });
@@ -189,10 +194,16 @@ export default function RegisterScreen({ navigation, route }: Props) {
 
           {esGomero && (
             <View style={styles.vehiculo}>
-              <Text style={styles.vehiculoTitulo}>Tu vehículo de trabajo</Text>
+              <Text style={styles.vehiculoTitulo}>Para que el cliente te reconozca</Text>
               <Text style={styles.vehiculoSub}>
-                Se lo mostramos al cliente cuando aceptás un pedido, para que te reconozca al llegar.
+                Le mostramos tu foto y tu vehículo de trabajo cuando aceptás un pedido.
               </Text>
+
+              <FotoPerfilPicker
+                uri={foto?.uri ?? null}
+                onChange={(f) => { setFoto(f); setErrores((e) => ({ ...e, foto: undefined })); }}
+                error={errores.foto}
+              />
 
               <VehiculoForm
                 valor={vehiculo}

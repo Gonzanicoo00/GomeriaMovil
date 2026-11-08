@@ -71,8 +71,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Usamos tus fotos para que cargues la foto de tu vehículo.",
-          "cameraPermission": "Usamos la cámara para que saques una foto de tu vehículo.",
+          "photosPermission": "Usamos tus fotos para que cargues tu foto de perfil.",
+          "cameraPermission": "Usamos la cámara para que te saques una foto de perfil.",
           "microphonePermission": false
         }
       ],

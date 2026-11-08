@@ -1,11 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Image, ImageStyle, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { fonts } from '../theme';
 import { iniciales } from '../utils/format';
 
 interface Props {
   nombre?: string | null;
   apellido?: string | null;
+  /** Foto de la persona; sin foto se muestran las iniciales. */
+  uri?: string | null;
   size?: number;
   style?: ViewStyle;
 }
@@ -20,7 +22,18 @@ function colorPara(texto: string): string {
   return PALETA[Math.abs(hash) % PALETA.length];
 }
 
-export function Avatar({ nombre, apellido, size = 44, style }: Props) {
+export function Avatar({ nombre, apellido, uri, size = 44, style }: Props) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[{ width: size, height: size, borderRadius: size / 2 }, style as ImageStyle]}
+        resizeMode="cover"
+        accessibilityLabel={`Foto de ${nombre ?? ''} ${apellido ?? ''}`.trim()}
+      />
+    );
+  }
+
   return (
     <View
       style={[

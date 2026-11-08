@@ -38,19 +38,19 @@ class Gomero
         ]);
     }
 
-    public static function guardarFotoVehiculo(int $usuarioId, string $base64): void
+    public static function guardarFoto(int $usuarioId, string $base64): void
     {
         $stmt = Database::connection()->prepare(
-            'INSERT INTO vehiculo_fotos (usuario_id, imagen) VALUES (:usuario_id, :imagen)
+            'INSERT INTO gomero_fotos (usuario_id, imagen) VALUES (:usuario_id, :imagen)
              ON DUPLICATE KEY UPDATE imagen = VALUES(imagen)'
         );
         $stmt->execute(['usuario_id' => $usuarioId, 'imagen' => $base64]);
     }
 
-    public static function fotoVehiculo(int $usuarioId): ?string
+    public static function foto(int $usuarioId): ?string
     {
         $stmt = Database::connection()->prepare(
-            'SELECT imagen FROM vehiculo_fotos WHERE usuario_id = :usuario_id LIMIT 1'
+            'SELECT imagen FROM gomero_fotos WHERE usuario_id = :usuario_id LIMIT 1'
         );
         $stmt->execute(['usuario_id' => $usuarioId]);
         $imagen = $stmt->fetchColumn();
@@ -58,9 +58,9 @@ class Gomero
     }
 
     /**
-     * La foto del vehiculo la ve el propio gomero o un cliente al que le haya tomado algun pedido.
+     * La foto del gomero la ve el propio gomero o un cliente al que le haya tomado algun pedido.
      */
-    public static function puedeVerVehiculo(int $gomeroId, int $usuarioId): bool
+    public static function puedeVerFoto(int $gomeroId, int $usuarioId): bool
     {
         if ($gomeroId === $usuarioId) {
             return true;

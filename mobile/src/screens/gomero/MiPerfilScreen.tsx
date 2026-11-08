@@ -5,6 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import axios from 'axios';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
+import { FotoElegida, FotoPerfilPicker } from '../../components/FotoPerfilPicker';
 import { IconButton } from '../../components/IconButton';
 import { Input } from '../../components/Input';
 import { DatosVehiculo, ErroresVehiculo, VehiculoForm, validarVehiculo, vehiculoParaApi } from '../../components/VehiculoForm';
@@ -21,6 +22,7 @@ type Props = NativeStackScreenProps<GomeroStackParamList, 'MiPerfil'>;
 interface Errores {
   nombre?: string;
   apellido?: string;
+  foto?: string;
 }
 
 export default function MiPerfilScreen({ navigation }: Props) {
@@ -40,20 +42,23 @@ export default function MiPerfilScreen({ navigation }: Props) {
     marcaModelo: gomero?.vehiculo_marca_modelo ?? '',
     color: gomero?.vehiculo_color ?? '',
     patente: gomero?.vehiculo_patente ?? '',
-    foto: null,
-    fotoActualUri: null,
   });
   const [erroresVehiculo, setErroresVehiculo] = useState<ErroresVehiculo>({});
+  /** Foto nueva elegida en esta pantalla (se sube al guardar). */
+  const [foto, setFoto] = useState<FotoElegida | null>(null);
+  /** Foto que ya estaba guardada, solo para mostrarla. */
+  const [fotoActualUri, setFotoActualUri] = useState<string | null>(null);
   const [cargandoFoto, setCargandoFoto] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const vehiculoIncompleto = !gomero?.vehiculo_tipo || !gomero?.vehiculo_patente;
+  const fotoUri = foto?.uri ?? fotoActualUri;
+  const perfilIncompleto = !gomero?.vehiculo_tipo || !gomero?.vehiculo_patente || (!cargandoFoto && !fotoActualUri);
 
   useEffect(() => {
     if (!usuario) return;
     let activo = true;
-    GomerosApi.fotoVehiculo(usuario.id)
+    GomerosApi.fotoGomero(usuario.id)
       .then((base64) => {
-        if (activo) setVehiculo((v) => ({ ...v, fotoActualUri: `data:image/jpeg;base64,${base64}` }));
+        if (activo) setFotoActualUri(`data:image/jpeg;base64,${base64}`);
       })
       .catch((err) => {
         // 404 = todavía no cargó foto; cualquier otro error se avisa.
@@ -71,6 +76,7 @@ export default function MiPerfilScreen({ navigation }: Props) {
     const nuevos: Errores = {};
     if (nombre.trim().length < 2) nuevos.nombre = 'Ingresá tu nombre';
     if (apellido.trim().length < 2) nuevos.apellido = 'Ingresá tu apellido';
+    if (!fotoUri) nuevos.foto = 'Cargá una foto de tu cara';
     const nuevosVehiculo = validarVehiculo(vehiculo);
     setErrores(nuevos);
     setErroresVehiculo(nuevosVehiculo);
@@ -86,6 +92,8 @@ export default function MiPerfilScreen({ navigation }: Props) {
         apellido: apellido.trim(),
         telefono: telefono.trim(),
         vehiculo: vehiculoParaApi(vehiculo),
+        // La foto solo viaja si se eligió una nueva.
+        ...(foto ? { foto: foto.base64 } : {}),
       });
       await refrescarUsuario();
       toast({ tipo: 'exito', titulo: 'Perfil actualizado' });
@@ -106,23 +114,29 @@ export default function MiPerfilScreen({ navigation }: Props) {
 
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
         <View style={styles.identidad}>
-          <Avatar nombre={nombre || usuario?.nombre} apellido={apellido || usuario?.apellido} size={64} />
+          <Avatar nombre={nombre || usuario?.nombre} apellido={apellido || usuario?.apellido} uri={fotoUri} size={64} />
           <View style={styles.identidadTexto}>
             <Text style={styles.nombre} numberOfLines={1}>{nombre} {apellido}</Text>
             <Text style={styles.email} numberOfLines={1}>{usuario?.email}</Text>
           </View>
         </View>
 
-        {vehiculoIncompleto && (
+        {perfilIncompleto && (
           <View style={styles.aviso}>
-            <Text style={styles.avisoTitulo}>Completá los datos de tu vehículo</Text>
+            <Text style={styles.avisoTitulo}>Completá tu foto y los datos de tu vehículo</Text>
             <Text style={styles.avisoTexto}>
-              Los clientes ven la foto, el modelo y la patente cuando aceptás un pedido. Así saben a quién esperar.
+              Los clientes ven tu foto, el modelo y la patente cuando aceptás un pedido. Así saben a quién esperar.
             </Text>
           </View>
         )}
 
         <Text style={styles.seccion}>Datos personales</Text>
+        <FotoPerfilPicker
+          uri={fotoUri}
+          onChange={(f) => { setFoto(f); setErrores((e) => ({ ...e, foto: undefined })); }}
+          error={errores.foto}
+          cargando={cargandoFoto}
+        />
         <Input
           label="Nombre"
           icon="person-outline"
@@ -152,7 +166,6 @@ export default function MiPerfilScreen({ navigation }: Props) {
           onChange={setVehiculo}
           errores={erroresVehiculo}
           onErroresChange={setErroresVehiculo}
-          cargandoFoto={cargandoFoto}
         />
       </ScrollView>
 
