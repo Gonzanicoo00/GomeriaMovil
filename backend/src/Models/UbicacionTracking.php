@@ -24,19 +24,25 @@ class UbicacionTracking
     {
         $stmt = Database::connection()->prepare(
             'SELECT * FROM ubicaciones_tracking WHERE solicitud_id = :solicitud_id
-             ORDER BY registrado_en DESC LIMIT 1'
+             ORDER BY id DESC LIMIT 1'
         );
         $stmt->execute(['solicitud_id' => $solicitudId]);
         $row = $stmt->fetch();
         return $row ?: null;
     }
 
-    public static function historial(int $solicitudId): array
+    /**
+     * Posiciones registradas para la solicitud, en orden. Con $desdeId solo devuelve las posteriores
+     * a ese id, para que el cliente pida el recorrido de forma incremental.
+     */
+    public static function historial(int $solicitudId, int $desdeId = 0, int $limite = 2000): array
     {
         $stmt = Database::connection()->prepare(
-            'SELECT * FROM ubicaciones_tracking WHERE solicitud_id = :solicitud_id ORDER BY registrado_en ASC'
+            'SELECT id, latitud, longitud, registrado_en FROM ubicaciones_tracking
+             WHERE solicitud_id = :solicitud_id AND id > :desde
+             ORDER BY id ASC LIMIT ' . max(1, min($limite, 5000))
         );
-        $stmt->execute(['solicitud_id' => $solicitudId]);
+        $stmt->execute(['solicitud_id' => $solicitudId, 'desde' => $desdeId]);
         return $stmt->fetchAll();
     }
 }

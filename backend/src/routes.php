@@ -62,3 +62,4 @@ $router->post('/api/solicitudes/{id}/mensajes', [ChatController::class, 'enviar'
 // ---- Tracking de ubicacion ----
 $router->post('/api/solicitudes/{id}/tracking', [TrackingController::class, 'registrar'], [$soloGomero]);
 $router->get('/api/solicitudes/{id}/tracking', [TrackingController::class, 'ultimaPosicion'], [$auth]);
+$router->get('/api/solicitudes/{id}/tracking/historial', [TrackingController::class, 'historial'], [$auth]);

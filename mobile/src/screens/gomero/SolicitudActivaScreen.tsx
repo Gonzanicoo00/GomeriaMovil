@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
-import MapView from 'react-native-maps';
+import MapView, { Polyline } from 'react-native-maps';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
@@ -21,6 +21,7 @@ import * as TrackingApi from '../../api/tracking';
 import { getErrorMessage } from '../../api/client';
 import { usePolling } from '../../hooks/usePolling';
 import { useLocationWatcher, Coords } from '../../hooks/useLocationWatcher';
+import { useRuta } from '../../hooks/useRuta';
 import { useMensajesNoLeidos } from '../../hooks/useMensajesNoLeidos';
 import { useAuth } from '../../context/AuthContext';
 import { useFeedback } from '../../context/FeedbackContext';
@@ -92,22 +93,28 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
   }, [solicitudId]));
 
   const activa = !!solicitud && !['completada', 'cancelada'].includes(solicitud.estado);
+
+  const coordsCliente = useMemo<Coords | null>(
+    () => (solicitud ? { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) } : null),
+    [solicitud?.latitud, solicitud?.longitud]
+  );
+  // Ruta por calles hasta el cliente desde que acepta: se recalcula sola si toma otro camino.
+  const { ruta, recalculando } = useRuta(miPosicion, coordsCliente, enviandoTracking);
   const noLeidos = useMensajesNoLeidos(solicitudId, usuario?.id, activa && enfocada);
 
   const encuadrar = useCallback(
     (animado = true) => {
-      if (!solicitud) return;
-      const cliente = { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) };
+      if (!coordsCliente) return;
       if (miPosicion) {
-        mapRef.current?.fitToCoordinates([cliente, miPosicion], {
+        mapRef.current?.fitToCoordinates(ruta ? [coordsCliente, ...ruta.puntos] : [coordsCliente, miPosicion], {
           edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
           animated: animado,
         });
       } else {
-        mapRef.current?.animateToRegion({ ...cliente, latitudeDelta: 0.01, longitudeDelta: 0.01 }, animado ? 400 : 0);
+        mapRef.current?.animateToRegion({ ...coordsCliente, latitudeDelta: 0.01, longitudeDelta: 0.01 }, animado ? 400 : 0);
       }
     },
-    [solicitud?.latitud, solicitud?.longitud, miPosicion]
+    [coordsCliente, miPosicion, ruta ? ruta.puntos.length : 0]
   );
 
   // Reencuadra el mapa para que ambos puntos (cliente y gomero) queden siempre visibles.
@@ -185,7 +192,11 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
 
   let distancia: number | null = null;
   let etaMin: number | null = null;
-  if (miPosicion) {
+  if (ruta) {
+    // Distancia y tiempo reales por calle.
+    distancia = ruta.distancia / 1000;
+    etaMin = Math.max(1, Math.round(ruta.duracion / 60));
+  } else if (miPosicion) {
     distancia = distanciaKm(lat, lng, miPosicion.latitude, miPosicion.longitude);
     etaMin = estimarEtaMinutos(distancia);
   }
@@ -253,6 +264,12 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
           seguir.current = false;
         }}
       >
+        {ruta && enviandoTracking && (
+          <>
+            <Polyline coordinates={ruta.puntos} strokeColor={colors.surface} strokeWidth={10} lineCap="round" lineJoin="round" zIndex={2} />
+            <Polyline coordinates={ruta.puntos} strokeColor={colors.info} strokeWidth={6} lineCap="round" lineJoin="round" zIndex={3} />
+          </>
+        )}
         <ClientePin coordinate={{ latitude: lat, longitude: lng }} title={solicitud.cliente_nombre ?? 'Cliente'} />
         {miPosicion && <GomeroPinAnimado coordinate={miPosicion} title="Vos" />}
       </MapView>
@@ -271,6 +288,13 @@ export default function SolicitudActivaScreen({ route, navigation }: Props) {
           />
         </View>
       </View>
+
+      {recalculando && enviandoTracking && (
+        <View style={[styles.aviso, { top: insets.top + spacing.sm + 56 }]} pointerEvents="none" accessibilityLiveRegion="polite">
+          <Ionicons name="git-branch-outline" size={16} color={colors.info} />
+          <Text style={styles.avisoTexto}>Recalculando ruta…</Text>
+        </View>
+      )}
 
       <BottomSheet alturaColapsada={alturaColapsada} alturaExpandida={alturaExpandida} encabezado={encabezado}>
         <View style={styles.cuerpo}>
@@ -395,6 +419,19 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
     },
     barraDerecha: { flexDirection: 'row', gap: spacing.sm },
+    aviso: {
+      position: 'absolute',
+      alignSelf: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surfaceElevated,
+      ...shadow.card,
+    },
+    avisoTexto: { ...typography.captionStrong, color: colors.text },
     encabezado: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg },
     encabezadoFila: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     encabezadoTexto: { flex: 1 },

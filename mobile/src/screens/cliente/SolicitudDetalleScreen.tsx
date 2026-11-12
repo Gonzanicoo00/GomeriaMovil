@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
-import MapView from 'react-native-maps';
+import MapView, { Polyline } from 'react-native-maps';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { Avatar } from '../../components/Avatar';
@@ -22,13 +22,15 @@ import * as SolicitudesApi from '../../api/solicitudes';
 import * as TrackingApi from '../../api/tracking';
 import { getErrorMessage } from '../../api/client';
 import { usePolling } from '../../hooks/usePolling';
+import { useRuta } from '../../hooks/useRuta';
+import { Coords } from '../../hooks/useLocationWatcher';
 import { useMensajesNoLeidos } from '../../hooks/useMensajesNoLeidos';
 import { useAuth } from '../../context/AuthContext';
 import { useFeedback } from '../../context/FeedbackContext';
 import { haptics } from '../../utils/haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { ThemeColors, estadoLabel, radius, spacing, tabular, typography } from '../../theme';
-import { Solicitud, UbicacionTracking } from '../../types';
+import { Solicitud } from '../../types';
 import { distanciaKm, estimarEtaMinutos, formatDuracion, formatPrecio, formatRelativeTime } from '../../utils/format';
 import { ClienteStackParamList } from '../../navigation/types';
 
@@ -36,6 +38,8 @@ type Props = NativeStackScreenProps<ClienteStackParamList, 'SolicitudDetalle'>;
 
 const CANCELABLES: Solicitud['estado'][] = ['pendiente', 'asignada', 'en_camino'];
 const CON_TRACKING: Solicitud['estado'][] = ['asignada', 'en_camino', 'en_proceso'];
+// Mientras el gomero viene para acá se dibuja la ruta que le falta.
+const CON_RUTA: Solicitud['estado'][] = ['asignada', 'en_camino'];
 
 export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   const { solicitudId } = route.params;
@@ -47,7 +51,11 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   const { height } = useWindowDimensions();
   const enfocada = useIsFocused();
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
-  const [posicionGomero, setPosicionGomero] = useState<UbicacionTracking | null>(null);
+  // Última posición del gomero. Una vez que aparece no se borra nunca: el pin queda siempre en el mapa.
+  const [posicionGomero, setPosicionGomero] = useState<TrackingApi.PuntoRecorrido | null>(null);
+  // Camino que el gomero ya recorrió desde que aceptó.
+  const [recorrido, setRecorrido] = useState<Coords[]>([]);
+  const ultimoIdRecorrido = useRef(0);
   const [enviandoCalificacion, setEnviandoCalificacion] = useState(false);
   const [yaCalifico, setYaCalifico] = useState(false);
   const [exitoVisible, setExitoVisible] = useState(false);
@@ -90,17 +98,34 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
     estadoAnterior.current = estado;
   }, [solicitud?.estado, toast]);
 
+  // Trae solo las posiciones nuevas del gomero: se suman al recorrido y la última mueve el pin.
   const cargarPosicion = useCallback(async () => {
     if (!solicitud || !CON_TRACKING.includes(solicitud.estado)) return;
     try {
-      const pos = await TrackingApi.ultimaPosicion(solicitudId);
-      setPosicionGomero(pos);
+      const nuevos = await TrackingApi.recorrido(solicitudId, ultimoIdRecorrido.current);
+      if (nuevos.length === 0) return;
+      ultimoIdRecorrido.current = Number(nuevos[nuevos.length - 1].id);
+      setPosicionGomero(nuevos[nuevos.length - 1]);
+      setRecorrido((prev) => [
+        ...prev,
+        ...nuevos.map((p) => ({ latitude: parseFloat(p.latitud), longitude: parseFloat(p.longitud) })),
+      ]);
     } catch {
-      // todavia no hay tracking
+      // sin conexión o todavía no hay tracking: se mantiene lo último que teníamos
     }
-  }, [solicitud, solicitudId]);
+  }, [solicitud?.estado, solicitudId]);
 
-  usePolling(cargarPosicion, 3000, !!solicitud);
+  usePolling(cargarPosicion, 3000, !!solicitud && CON_TRACKING.includes(solicitud.estado));
+
+  const coordsCliente = useMemo<Coords | null>(
+    () => (solicitud ? { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) } : null),
+    [solicitud?.latitud, solicitud?.longitud]
+  );
+  const coordsGomero = useMemo<Coords | null>(
+    () => (posicionGomero ? { latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) } : null),
+    [posicionGomero?.latitud, posicionGomero?.longitud]
+  );
+  const { ruta } = useRuta(coordsGomero, coordsCliente, !!solicitud && CON_RUTA.includes(solicitud.estado));
 
   // Foto de la cara del gomero asignado, para que el cliente sepa a quién esperar.
   const [fotoGomero, setFotoGomero] = useState<string | null>(null);
@@ -122,18 +147,18 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
 
   const encuadrar = useCallback(
     (animado = true) => {
-      if (!solicitud) return;
-      const cliente = { latitude: parseFloat(solicitud.latitud), longitude: parseFloat(solicitud.longitud) };
-      if (posicionGomero) {
-        mapRef.current?.fitToCoordinates(
-          [cliente, { latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) }],
-          { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: animado }
-        );
+      if (!coordsCliente) return;
+      if (coordsGomero) {
+        // Se encuadra todo el camino que falta, no solo los dos puntos, para que se vea por dónde viene.
+        mapRef.current?.fitToCoordinates(ruta ? [coordsCliente, ...ruta.puntos] : [coordsCliente, coordsGomero], {
+          edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
+          animated: animado,
+        });
       } else {
-        mapRef.current?.animateToRegion({ ...cliente, latitudeDelta: 0.01, longitudeDelta: 0.01 }, animado ? 400 : 0);
+        mapRef.current?.animateToRegion({ ...coordsCliente, latitudeDelta: 0.01, longitudeDelta: 0.01 }, animado ? 400 : 0);
       }
     },
-    [solicitud?.latitud, solicitud?.longitud, posicionGomero]
+    [coordsCliente, coordsGomero, ruta ? ruta.puntos.length : 0]
   );
 
   // Reencuadra el mapa para que cliente y gomero queden siempre visibles a medida que se mueve.
@@ -205,8 +230,14 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
   let distancia: number | null = null;
   let etaMin: number | null = null;
   if (posicionGomero && solicitud.estado !== 'en_proceso') {
-    distancia = distanciaKm(lat, lng, parseFloat(posicionGomero.latitud), parseFloat(posicionGomero.longitud));
-    etaMin = estimarEtaMinutos(distancia);
+    if (ruta && CON_RUTA.includes(solicitud.estado)) {
+      // Distancia y tiempo reales por calle.
+      distancia = ruta.distancia / 1000;
+      etaMin = Math.max(1, Math.round(ruta.duracion / 60));
+    } else {
+      distancia = distanciaKm(lat, lng, parseFloat(posicionGomero.latitud), parseFloat(posicionGomero.longitud));
+      etaMin = estimarEtaMinutos(distancia);
+    }
   }
 
   const duracion = formatDuracion(solicitud.fecha_inicio ?? solicitud.fecha_asignacion, solicitud.fecha_completado);
@@ -251,13 +282,19 @@ export default function SolicitudDetalleScreen({ route, navigation }: Props) {
           seguir.current = false;
         }}
       >
-        <ClientePin coordinate={{ latitude: lat, longitude: lng }} title="Tu ubicación" />
-        {posicionGomero && (
-          <GomeroPinAnimado
-            coordinate={{ latitude: parseFloat(posicionGomero.latitud), longitude: parseFloat(posicionGomero.longitud) }}
-            title={solicitud.gomero_nombre ?? 'Gomero'}
-          />
+        {/* Por dónde vino el gomero hasta ahora */}
+        {recorrido.length > 1 && (
+          <Polyline coordinates={recorrido} strokeColor={colors.textMuted} strokeWidth={4} lineCap="round" lineJoin="round" zIndex={1} />
         )}
+        {/* Camino que le falta, por calles: borde + línea para que resalte sobre el mapa */}
+        {ruta && CON_RUTA.includes(solicitud.estado) && (
+          <>
+            <Polyline coordinates={ruta.puntos} strokeColor={colors.surface} strokeWidth={9} lineCap="round" lineJoin="round" zIndex={2} />
+            <Polyline coordinates={ruta.puntos} strokeColor={colors.info} strokeWidth={5} lineCap="round" lineJoin="round" zIndex={3} />
+          </>
+        )}
+        <ClientePin coordinate={{ latitude: lat, longitude: lng }} title="Tu ubicación" />
+        {coordsGomero && <GomeroPinAnimado coordinate={coordsGomero} title={solicitud.gomero_nombre ?? 'Gomero'} />}
       </MapView>
 
       <View style={[styles.barraSuperior, { top: insets.top + spacing.sm }]} pointerEvents="box-none">

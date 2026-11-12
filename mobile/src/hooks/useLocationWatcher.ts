@@ -25,11 +25,23 @@ export function useLocationWatcher(enabled: boolean, onUpdate: (coords: Coords) 
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== 'granted') return;
 
+      // Arranca con la ultima posicion conocida (reciente) para que el mapa y la ruta aparezcan
+      // al instante, sin esperar el primer fix del GPS.
+      try {
+        const ultima = await Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 200 });
+        if (ultima && !cancelado) {
+          onUpdateRef.current({ latitude: ultima.coords.latitude, longitude: ultima.coords.longitude });
+        }
+      } catch {
+        // sin posicion previa: se espera al watcher
+      }
+      if (cancelado) return;
+
       const sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 4000,
-          distanceInterval: 10,
+          timeInterval: 3000,
+          distanceInterval: 5,
         },
         (pos) => {
           if (!cancelado) {

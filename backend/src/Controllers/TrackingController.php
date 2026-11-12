@@ -60,6 +60,23 @@ class TrackingController
         Response::success($posicion);
     }
 
+    /**
+     * Recorrido completo del gomero para la solicitud (para dibujar por donde fue viniendo).
+     * Acepta ?desde={id} para traer solo las posiciones nuevas.
+     */
+    public static function historial(array $params): void
+    {
+        $user = AuthMiddleware::user();
+        $solicitudId = (int) $params['id'];
+
+        if (!Solicitud::perteneceA($solicitudId, (int) $user['sub'])) {
+            Response::error('No tenes acceso a esta solicitud', 403);
+        }
+
+        $desde = isset($_GET['desde']) ? max(0, (int) $_GET['desde']) : 0;
+        Response::success(UbicacionTracking::historial($solicitudId, $desde));
+    }
+
     private static function input(): array
     {
         $raw = file_get_contents('php://input');
